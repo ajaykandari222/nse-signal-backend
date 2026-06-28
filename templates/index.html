@@ -162,13 +162,13 @@
   <div class="hero">
     <div class="hero-sub">Real RSI · Real MACD · Real VWAP · Yahoo Finance</div>
     <h1>NSE Stocks With <span class="grad">Best Technical Setup</span></h1>
-    <p>Scans 50+ NSE stocks from Yahoo Finance. RSI-14, MACD, EMA, VWAP computed from real candles. Top 10 ranked by technical score.</p>
+    <p>Dynamically scans ALL active NSE stocks — top gainers, losers, most active from NSE + NIFTY 500 base. RSI-14, MACD, EMA, VWAP computed from real candles. No stock is missed.</p>
   </div>
 
   <!-- SCAN BOX -->
   <div class="scanbox">
     <button class="btn" id="scanBtn" onclick="runScan()">▶ Run Live Technical Scan</button>
-    <div class="btn-sub" id="scanSub">Fetches 5-min candles · Computes RSI/MACD/VWAP/EMA · ~60 sec</div>
+    <div class="btn-sub" id="scanSub">Scans all NSE movers · Fetches real candles · Computes RSI/MACD/VWAP · ~90 sec</div>
   </div>
 
   <!-- PROGRESS -->
@@ -182,7 +182,7 @@
 
   <!-- SUMMARY -->
   <div class="summary" id="summary" style="display:none;">
-    <div class="sum-cell"><div class="sum-label">Scanned</div><div class="sum-val" id="sumScanned" style="color:#3d9bff">—</div></div>
+    <div class="sum-cell"><div class="sum-label">Stocks Found</div><div class="sum-val" id="sumScanned" style="color:#3d9bff">—</div></div>
     <div class="sum-cell"><div class="sum-label">Errors</div><div class="sum-val" id="sumErrors" style="color:#00e5a0">—</div></div>
     <div class="sum-cell"><div class="sum-label">Top Picks</div><div class="sum-val" id="sumPicks" style="color:#00e5a0">—</div></div>
     <div class="sum-cell"><div class="sum-label">Scan Time</div><div class="sum-val" id="sumTime" style="color:#8b5cf6;font-size:12px">—</div></div>
@@ -434,9 +434,9 @@ async function runScan() {
     await fetchIndices();
     addLog("[✓] Indices fetched");
     setProg(22, "Scanning 50+ NSE stocks — fetching candles, computing RSI/MACD/VWAP…");
-    addLog("[SCAN] Fetching 5-min candles from Yahoo Finance for all watchlist stocks…");
-    addLog("[SCAN] Computing RSI-14, MACD, EMA, VWAP, volume spike for each…");
-    addLog("[SCAN] Please wait ~60 seconds…");
+    addLog("[SCAN] Fetching symbols: NSE top gainers + losers + most active + NIFTY500…");
+    addLog("[SCAN] Computing RSI-14, MACD, EMA20/50, VWAP, volume for each symbol…");
+    addLog("[SCAN] Please wait 60–90 seconds — broad market scan in progress…");
 
     // Full scan
     const sr = await fetch(`${BACKEND}/scan`);
@@ -467,14 +467,14 @@ async function runScan() {
     stocks = sd.top10;
 
     // Update summary
-    document.getElementById("sumScanned").textContent = sd.scanned;
+    document.getElementById("sumScanned").textContent = `${sd.scanned}/${sd.total||sd.scanned}`;
     document.getElementById("sumErrors").textContent  = sd.errors;
     document.getElementById("sumPicks").textContent   = sd.top10.length;
     document.getElementById("sumTime").textContent    = sd.scan_time;
     document.getElementById("summary").style.display = "grid";
 
     document.getElementById("scanSub").textContent =
-      `${sd.scanned} stocks scanned at ${sd.scan_time} · Top ${sd.top10.length} by technical score`;
+      `${sd.total || sd.scanned} stocks scanned (${sd.scanned} valid) at ${sd.scan_time} · Top ${sd.top10.length} by technical score`;
 
     renderPicks();
     addLog("[✓] Done — expand any card for full indicators + TradingView link");
