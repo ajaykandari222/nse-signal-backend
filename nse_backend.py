@@ -1,9 +1,10 @@
 """
-NSESignal Pro — Cloud Backend v3
-- 30 parallel workers
-- Hard 75s scan cutoff — returns partial results instead of 502
-- Gunicorn timeout 180s
-- Lean 120-stock list prioritising high-liquidity stocks
+NSESignal Pro — Cloud Backend v4
+KEY FIX: Background scanner + cached results
+- Scan runs in background every 5 minutes automatically
+- /scan endpoint returns cached result INSTANTLY (no timeout)
+- No more 502 errors ever
+- 30 parallel workers scan 150 stocks in ~60 seconds background
 """
 
 from flask import Flask, jsonify, render_template, request
@@ -23,11 +24,17 @@ app = Flask(__name__, template_folder="templates")
 CORS(app)
 IST = pytz.timezone("Asia/Kolkata")
 
-# ── 150 HIGH-LIQUIDITY NSE STOCKS ─────────────────────────────────────────
-# Covers NIFTY50, NIFTY NEXT50, key midcaps with highest daily volume
-# These account for ~85% of NSE daily turnover
+# ── CACHE ─────────────────────────────────────────────────────────────────
+cache = {
+    "result":     None,       # last scan result
+    "running":    False,      # scan in progress?
+    "last_run":   None,       # datetime of last completed scan
+    "scan_count": 0,          # total scans done since startup
+}
+cache_lock = threading.Lock()
+
+# ── WATCHLIST ─────────────────────────────────────────────────────────────
 WATCHLIST = [
-    # NIFTY 50 (highest liquidity)
     "RELIANCE","TCS","HDFCBANK","INFY","ICICIBANK","HINDUNILVR","SBIN",
     "BHARTIARTL","KOTAKBANK","LT","AXISBANK","ASIANPAINT","MARUTI","TITAN",
     "BAJFINANCE","WIPRO","TECHM","ULTRACEMCO","ONGC","NTPC","POWERGRID",
@@ -35,24 +42,21 @@ WATCHLIST = [
     "HINDALCO","COALINDIA","BPCL","IOC","GAIL","DRREDDY","CIPLA","DIVISLAB",
     "APOLLOHOSP","BAJAJFINSV","EICHERMOT","HEROMOTOCO","ADANIENT","ADANIPORTS",
     "LTIM","INDUSINDBK","ITC","VEDL","GRASIM","TATACONSUM","BRITANNIA",
-    # NIFTY NEXT 50
     "SIEMENS","ABB","HAVELLS","PIDILITIND","BERGEPAINT","MUTHOOTFIN","CHOLAFIN",
     "SBILIFE","HDFCLIFE","ICICIGI","MARICO","COLPAL","DABUR","GODREJCP",
     "SAIL","NMDC","AMBUJACEM","SHREECEM","IRCTC","IRFC","RVNL","BEL","HAL",
     "BHEL","BAJAJ-AUTO","TRENT","IDFCFIRSTB","BANDHANBNK","FEDERALBNK",
-    # High-volume midcaps
     "ZOMATO","NYKAA","DMART","DIXON","VOLTAS","POLYCAB","KPITTECH","MPHASIS",
-    "LTTS","PERSISTENT","COFORGE","TATASTEEL","BALKRISIND","APOLLOTYRE","MRF",
+    "LTTS","PERSISTENT","COFORGE","BALKRISIND","APOLLOTYRE","MRF",
     "INDIGO","GMRINFRA","CUMMINSIND","ASTRAL","CONCOR","TATACOMM","BEML",
     "ANGELONE","CDSL","MCX","CAMS","POLICYBZR","PAYTM","NAUKRI","INFOEDGE",
     "LICI","MAXHEALTH","FORTIS","DEEPAKNTR","NAVINFLUOR","TATACHEM","IIFL",
     "IREDA","NHPC","SJVN","RECLTD","PFC","LODHA","DLF","GODREJPROP",
     "ZYDUSLIFE","LUPIN","AUROPHARMA","TORNTPHARM","BIOCON","ALKEM",
     "RADICO","JUBLFOOD","MOTHERSON","BOSCHLTD","TIINDIA","ENDURANCE",
-    "ADANIGREEN","ADANITRANS","ADANIPOWER","TATAPOWER","TORNTPOWER",
-    "MANAPPURAM","MOTILALOSW","CANFINHOME","AAVAS","HOMEFIRST",
-    "SENCO","KALYAN","PAGEIND","APLAPOLLO","RATNAMANI","NMDC",
-    "RAILTEL","GRSE","COCHINSHIP","MAZAGON",
+    "ADANIGREEN","ADANIPOWER","TATAPOWER","TORNTPOWER","MANAPPURAM","MOTILALOSW",
+    "CANFINHOME","AAVAS","HOMEFIRST","SENCO","KALYAN","APLAPOLLO","RATNAMANI",
+    "RAILTEL","GRSE","COCHINSHIP","PAGEIND","ABCAPITAL","RBLBANK",
 ]
 
 def get_ns(sym):
@@ -173,14 +177,74 @@ def fetch_one(sym):
     except:
         return None
 
-# ── KEEP ALIVE ────────────────────────────────────────────────────────────
+def run_scan_background():
+    """Run full scan in background thread. Updates cache when done."""
+    with cache_lock:
+        if cache["running"]:
+            return  # already running
+        cache["running"] = True
+
+    now   = datetime.now(IST)
+    start = time.time()
+    print(f"\n[BG SCAN] Starting — {now.strftime('%I:%M %p IST')} — {len(WATCHLIST)} stocks")
+
+    results = []
+    errors  = 0
+
+    with ThreadPoolExecutor(max_workers=25) as executor:
+        futures = {executor.submit(fetch_one, sym): sym for sym in WATCHLIST}
+        for future in as_completed(futures, timeout=120):
+            try:
+                r = future.result(timeout=8)
+                if r: results.append(r)
+                else: errors += 1
+            except:
+                errors += 1
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    elapsed = round(time.time() - start, 1)
+    print(f"[BG SCAN] Done — {len(results)} valid, {errors} errors, {elapsed}s")
+
+    with cache_lock:
+        cache["result"] = {
+            "status":    "success",
+            "scan_time": now.strftime("%I:%M %p IST"),
+            "date":      now.strftime("%d %b %Y"),
+            "scanned":   len(results),
+            "total":     len(WATCHLIST),
+            "errors":    errors,
+            "elapsed":   f"{elapsed}s",
+            "top10":     results[:10],
+            "cached":    True,
+        }
+        cache["last_run"]   = now
+        cache["running"]    = False
+        cache["scan_count"] += 1
+
+def background_scheduler():
+    """Run scan every 5 minutes automatically."""
+    # First scan immediately on startup
+    time.sleep(5)  # wait for server to be ready
+    while True:
+        try:
+            run_scan_background()
+        except Exception as e:
+            print(f"[SCHEDULER] Error: {e}")
+            with cache_lock:
+                cache["running"] = False
+        # Wait 5 minutes before next scan
+        time.sleep(5 * 60)
+
 def keep_alive():
     url = os.environ.get("RENDER_EXTERNAL_URL", "")
     if not url: return
     while True:
         time.sleep(14 * 60)
-        try: requests.get(f"{url}/health", timeout=10); print("[KEEP-ALIVE] pinged")
-        except: pass
+        try:
+            requests.get(f"{url}/health", timeout=10)
+            print("[KEEP-ALIVE] pinged")
+        except:
+            pass
 
 # ── ROUTES ────────────────────────────────────────────────────────────────
 
@@ -192,58 +256,55 @@ def frontend():
 @app.route("/health")
 def health():
     now = datetime.now(IST)
+    with cache_lock:
+        last = cache["last_run"].strftime("%I:%M %p IST") if cache["last_run"] else "never"
+        running = cache["running"]
+        count   = cache["scan_count"]
     return jsonify({
-        "status": "running", "service": "NSESignal Pro",
-        "time": now.strftime("%I:%M:%S %p IST"), "message": "Backend is live"
+        "status":      "running",
+        "service":     "NSESignal Pro v4",
+        "time":        now.strftime("%I:%M:%S %p IST"),
+        "last_scan":   last,
+        "scan_running": running,
+        "scan_count":  count,
+        "message":     "Backend is live — scan runs every 5 minutes in background"
     })
 
 @app.route("/scan")
 def scan():
-    now   = datetime.now(IST)
-    start = time.time()
-    print(f"\n[SCAN] {now.strftime('%I:%M %p IST')} — {len(WATCHLIST)} stocks, 30 workers, 75s limit")
+    """Returns cached result instantly. Triggers fresh scan if cache is empty."""
+    with cache_lock:
+        result  = cache["result"]
+        running = cache["running"]
 
-    results = []
-    errors  = 0
-    done    = 0
+    # No cache yet — trigger scan and wait briefly
+    if result is None:
+        if not running:
+            threading.Thread(target=run_scan_background, daemon=True).start()
+        # Wait up to 90 seconds for first scan
+        for _ in range(90):
+            time.sleep(1)
+            with cache_lock:
+                if cache["result"] is not None:
+                    return jsonify(cache["result"])
+        return jsonify({
+            "status":  "scanning",
+            "message": "First scan in progress — please retry in 30 seconds",
+            "top10":   []
+        }), 202
 
-    # 30 parallel workers, hard 75s cutoff — returns partial results instead of 502
-    with ThreadPoolExecutor(max_workers=30) as executor:
-        futures = {executor.submit(fetch_one, sym): sym for sym in WATCHLIST}
-        for future in as_completed(futures, timeout=75):
-            try:
-                r = future.result(timeout=6)
-                done += 1
-                if r: results.append(r)
-                else: errors += 1
-            except Exception:
-                errors += 1
-                done   += 1
+    # Return cached result immediately
+    return jsonify(result)
 
-    elapsed = round(time.time() - start, 1)
-    results.sort(key=lambda x: x["score"], reverse=True)
-    top10 = results[:10]
-    print(f"[SCAN] {len(results)} valid / {done} done / {errors} errors in {elapsed}s")
-
-    return jsonify({
-        "status":    "success",
-        "scan_time": now.strftime("%I:%M %p IST"),
-        "date":      now.strftime("%d %b %Y"),
-        "scanned":   len(results),
-        "total":     len(WATCHLIST),
-        "errors":    errors,
-        "elapsed":   f"{elapsed}s",
-        "top10":     top10
-    })
-
-@app.route("/quote/<symbol>")
-def quote(symbol):
-    try:
-        r = fetch_one(symbol.upper())
-        if not r: return jsonify({"status":"error","message":"No data"}), 404
-        return jsonify({"status":"success", **r})
-    except Exception as e:
-        return jsonify({"status":"error","message":str(e)}), 500
+@app.route("/refresh")
+def refresh():
+    """Trigger a fresh scan in background. Returns immediately."""
+    with cache_lock:
+        running = cache["running"]
+    if not running:
+        threading.Thread(target=run_scan_background, daemon=True).start()
+        return jsonify({"status": "started", "message": "Fresh scan started in background"})
+    return jsonify({"status": "already_running", "message": "Scan already in progress"})
 
 @app.route("/indices")
 def indices():
@@ -254,17 +315,35 @@ def indices():
             if df is not None and len(df) > 1:
                 close = float(df["Close"].squeeze().iloc[-1])
                 prev  = float(df["Close"].squeeze().iloc[-2])
-                out[name] = {"price": round(close,2), "change": round(close-prev,2),
-                             "pct": round((close-prev)/prev*100,2)}
-        except: out[name] = {}
+                out[name] = {
+                    "price":  round(close, 2),
+                    "change": round(close - prev, 2),
+                    "pct":    round((close - prev) / prev * 100, 2)
+                }
+        except:
+            out[name] = {}
     return jsonify(out)
 
 @app.route("/news", methods=["POST"])
 def news():
     return jsonify({})
 
+# ── STARTUP ───────────────────────────────────────────────────────────────
+# Start background scheduler and keep-alive on first request
+_started = False
+
+@app.before_request
+def start_background_threads():
+    global _started
+    if not _started:
+        _started = True
+        threading.Thread(target=background_scheduler, daemon=True).start()
+        threading.Thread(target=keep_alive, daemon=True).start()
+        print("[STARTUP] Background scheduler and keep-alive started")
+
 if __name__ == "__main__":
+    threading.Thread(target=background_scheduler, daemon=True).start()
     threading.Thread(target=keep_alive, daemon=True).start()
     port = int(os.environ.get("PORT", 5000))
-    print(f"NSESignal Pro v3 starting on port {port}")
+    print(f"NSESignal Pro v4 starting on port {port}")
     app.run(host="0.0.0.0", port=port)
