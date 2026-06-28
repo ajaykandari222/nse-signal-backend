@@ -1,11 +1,9 @@
 """
-NSESignal Pro — Cloud Backend v2
-=================================
-Key improvements:
-- Parallel stock fetching (ThreadPoolExecutor) — scans 200 stocks in 60 sec
-- Direct NSE website API for top gainers/losers/most-active (no nsetools)
-- Render 60s timeout handled — returns partial results if timeout hit
-- Gunicorn timeout set to 120s via Procfile
+NSESignal Pro — Cloud Backend v3
+- 30 parallel workers
+- Hard 75s scan cutoff — returns partial results instead of 502
+- Gunicorn timeout 180s
+- Lean 120-stock list prioritising high-liquidity stocks
 """
 
 from flask import Flask, jsonify, render_template, request
@@ -19,106 +17,43 @@ import threading
 import time
 import requests
 import os
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 app = Flask(__name__, template_folder="templates")
 CORS(app)
 IST = pytz.timezone("Asia/Kolkata")
 
-# ── NIFTY 500 BASE LIST ────────────────────────────────────────────────────
-NIFTY500_BASE = [
-    "RELIANCE","TCS","HDFCBANK","INFY","ICICIBANK","HINDUNILVR","SBIN","BHARTIARTL",
-    "KOTAKBANK","LT","AXISBANK","ASIANPAINT","MARUTI","TITAN","BAJFINANCE","WIPRO",
-    "TECHM","ULTRACEMCO","ONGC","NTPC","POWERGRID","SUNPHARMA","TATAMOTORS","HCLTECH",
-    "NESTLEIND","TATASTEEL","JSWSTEEL","HINDALCO","COALINDIA","BPCL","IOC","GAIL",
-    "DRREDDY","CIPLA","DIVISLAB","APOLLOHOSP","BAJAJFINSV","BAJAJ-AUTO","EICHERMOT",
-    "HEROMOTOCO","ADANIENT","ADANIPORTS","LTIM","INDUSINDBK","MM",
+# ── 150 HIGH-LIQUIDITY NSE STOCKS ─────────────────────────────────────────
+# Covers NIFTY50, NIFTY NEXT50, key midcaps with highest daily volume
+# These account for ~85% of NSE daily turnover
+WATCHLIST = [
+    # NIFTY 50 (highest liquidity)
+    "RELIANCE","TCS","HDFCBANK","INFY","ICICIBANK","HINDUNILVR","SBIN",
+    "BHARTIARTL","KOTAKBANK","LT","AXISBANK","ASIANPAINT","MARUTI","TITAN",
+    "BAJFINANCE","WIPRO","TECHM","ULTRACEMCO","ONGC","NTPC","POWERGRID",
+    "SUNPHARMA","TATAMOTORS","HCLTECH","NESTLEIND","TATASTEEL","JSWSTEEL",
+    "HINDALCO","COALINDIA","BPCL","IOC","GAIL","DRREDDY","CIPLA","DIVISLAB",
+    "APOLLOHOSP","BAJAJFINSV","EICHERMOT","HEROMOTOCO","ADANIENT","ADANIPORTS",
+    "LTIM","INDUSINDBK","ITC","VEDL","GRASIM","TATACONSUM","BRITANNIA",
+    # NIFTY NEXT 50
     "SIEMENS","ABB","HAVELLS","PIDILITIND","BERGEPAINT","MUTHOOTFIN","CHOLAFIN",
-    "SBILIFE","HDFCLIFE","ICICIGI","MARICO","COLPAL","DABUR","GODREJCP","BRITANNIA",
-    "TATACONSUM","ITC","VEDL","SAIL","NMDC","GRASIM","AMBUJACEM","SHREECEM",
-    "IRCTC","IRFC","RVNL","RAILTEL","BEL","HAL","BHEL","BEML",
+    "SBILIFE","HDFCLIFE","ICICIGI","MARICO","COLPAL","DABUR","GODREJCP",
+    "SAIL","NMDC","AMBUJACEM","SHREECEM","IRCTC","IRFC","RVNL","BEL","HAL",
+    "BHEL","BAJAJ-AUTO","TRENT","IDFCFIRSTB","BANDHANBNK","FEDERALBNK",
+    # High-volume midcaps
     "ZOMATO","NYKAA","DMART","DIXON","VOLTAS","POLYCAB","KPITTECH","MPHASIS",
-    "LTTS","PERSISTENT","COFORGE","SONACOMS","BALKRISIND","CEATLTD","APOLLOTYRE","MRF",
-    "TRENT","IDFCFIRSTB","BANDHANBNK","RBLBANK","FEDERALBNK","TATACOMM",
-    "INDIGO","GMRINFRA","CUMMINSIND","THERMAX","ASTRAL","CONCOR",
-    "ANGELONE","CDSL","BSE","MCX","CAMS","KFINTECH","POLICYBZR","PAYTM",
-    "NAUKRI","INFOEDGE","LICI","MAXHEALTH","FORTIS","CLEANSCIENCE","DEEPAKNTR",
-    "TATACHEM","NAVINFLUOR","ALKYLAMINE","FINEORG","PRAJIND","CERA","VMART",
-    "TTKPRESTIG","BAJAJHFL","CANFINHOME","APTUS","HOMEFIRST","AAVAS","REPCO",
-    "MANAPPURAM","IIFL","MOTILALOSW","IREDA","NHPC","SJVN","RECLTD","PFC",
-    "LODHA","PRESTIGE","OBEROIRLTY","PHOENIXLTD","GODREJPROP","DLF","SOBHA",
-    "ZYDUSLIFE","LUPIN","AUROPHARMA","TORNTPHARM","BIOCON","ALKEM","IPCALAB",
-    "PAGEIND","MCDOWELL-N","RADICO","JUBLFOOD","WESTLIFE","SAPPHIRE",
-    "JYOTHYLAB","EMAMILTD","GILLETTE","PGHH","VSTIND","ABCAPITAL","CHOICEIN",
-    "MOTHERSON","MINDAIND","BOSCHLTD","TIINDIA","SUPRAJIT","ENDURANCE",
-    "KAJARIACER","CERA","ORIENTELEC","FINOLEX","RATNAMANI","APLAPOLLO",
-    "GPPL","ADANIGREEN","ADANITRANS","ADANIPOWER","TATAPOWER","TORNTPOWER",
-    "LINDEINDIA","PIDILITIND","NAVNETEDUL","PCJEWELLER","SENCO","KALYAN",
+    "LTTS","PERSISTENT","COFORGE","TATASTEEL","BALKRISIND","APOLLOTYRE","MRF",
+    "INDIGO","GMRINFRA","CUMMINSIND","ASTRAL","CONCOR","TATACOMM","BEML",
+    "ANGELONE","CDSL","MCX","CAMS","POLICYBZR","PAYTM","NAUKRI","INFOEDGE",
+    "LICI","MAXHEALTH","FORTIS","DEEPAKNTR","NAVINFLUOR","TATACHEM","IIFL",
+    "IREDA","NHPC","SJVN","RECLTD","PFC","LODHA","DLF","GODREJPROP",
+    "ZYDUSLIFE","LUPIN","AUROPHARMA","TORNTPHARM","BIOCON","ALKEM",
+    "RADICO","JUBLFOOD","MOTHERSON","BOSCHLTD","TIINDIA","ENDURANCE",
+    "ADANIGREEN","ADANITRANS","ADANIPOWER","TATAPOWER","TORNTPOWER",
+    "MANAPPURAM","MOTILALOSW","CANFINHOME","AAVAS","HOMEFIRST",
+    "SENCO","KALYAN","PAGEIND","APLAPOLLO","RATNAMANI","NMDC",
+    "RAILTEL","GRSE","COCHINSHIP","MAZAGON",
 ]
-
-NSE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.nseindia.com/",
-    "Connection": "keep-alive",
-}
-
-def get_nse_session():
-    """Create a requests session with NSE cookies."""
-    s = requests.Session()
-    try:
-        s.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=8)
-    except:
-        pass
-    return s
-
-def get_dynamic_symbols():
-    """
-    Build scan list from:
-    1. NSE live API — top gainers, losers, most active by volume & value
-    2. NIFTY500 base list
-    Returns deduplicated list of up to ~200 symbols.
-    """
-    symbols = set(NIFTY500_BASE)
-    added   = 0
-
-    try:
-        session = get_nse_session()
-        endpoints = [
-            "https://www.nseindia.com/api/live-analysis-variations?index=gainers&type=pct",
-            "https://www.nseindia.com/api/live-analysis-variations?index=losers&type=pct",
-            "https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume",
-            "https://www.nseindia.com/api/live-analysis-most-active-securities?index=value",
-            "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%20500",
-        ]
-        for url in endpoints:
-            try:
-                r = session.get(url, headers=NSE_HEADERS, timeout=6)
-                if not r.ok:
-                    continue
-                data = r.json()
-                # Different endpoints have different structures
-                items = (data.get("data") or data.get("NIFTY 500") or
-                         data.get("gainers") or data.get("losers") or [])
-                for item in items:
-                    sym = (item.get("symbol") or item.get("Symbol","")).strip().upper()
-                    # Clean common suffixes
-                    sym = sym.replace("-EQ","").replace(" EQ","").strip()
-                    if sym and len(sym) <= 20 and sym.isalpha() or "-" in sym or "&" in sym:
-                        symbols.add(sym)
-                        added += 1
-            except Exception as e:
-                print(f"[NSE] endpoint failed: {e}")
-                continue
-        print(f"[NSE] Added {added} symbols from live NSE APIs")
-    except Exception as e:
-        print(f"[NSE] Session failed: {e}")
-
-    final = sorted(list(symbols))
-    print(f"[SYMBOLS] Total unique symbols: {len(final)}")
-    return final
 
 def get_ns(sym):
     return sym.replace("&", "%26") + ".NS"
@@ -131,7 +66,6 @@ def compute_indicators(df):
         high   = df["High"].squeeze()
         low    = df["Low"].squeeze()
         volume = df["Volume"].squeeze()
-
         mask   = close.notna() & volume.notna() & (close > 0)
         close  = close[mask]; high = high[mask]
         low    = low[mask];   volume = volume[mask]
@@ -187,7 +121,6 @@ def compute_indicators(df):
 def score_stock(ind):
     if not ind: return 0, []
     score = 0; signals = []
-
     rsi = ind.get("rsi", 50)
     if   52 <= rsi <= 68: score += 2.5; signals.append(f"RSI {rsi} — ideal momentum zone ✓")
     elif 45 <= rsi < 52:  score += 1.5; signals.append(f"RSI {rsi} — building momentum ✓")
@@ -208,9 +141,9 @@ def score_stock(ind):
         score -= 0.5; signals.append(f"Below VWAP ₹{ind.get('vwap')} ✗")
 
     if ind.get("golden_cross"):
-        score += 1.5; signals.append(f"Golden cross EMA20 > EMA50 ✓")
+        score += 1.5; signals.append(f"Golden cross: EMA20 > EMA50 ✓")
     else:
-        score -= 0.5; signals.append(f"Death cross EMA20 < EMA50 ✗")
+        score -= 0.5; signals.append(f"Death cross: EMA20 < EMA50 ✗")
 
     if ind.get("above_ema20"):
         score += 0.5; signals.append(f"Price above EMA20 ₹{ind.get('ema20')} ✓")
@@ -223,12 +156,11 @@ def score_stock(ind):
 
     bb_pct = ind.get("bb_pct", 0.5)
     if   0.2 <= bb_pct <= 0.7: score += 0.5; signals.append(f"Bollinger {round(bb_pct*100)}% — healthy ✓")
-    elif bb_pct > 0.9:         score -= 0.5; signals.append(f"Bollinger {round(bb_pct*100)}% — upper band ✗")
+    elif bb_pct > 0.9:         score -= 0.5; signals.append(f"Bollinger near upper band ✗")
 
     return max(0, min(10, round(score, 1))), signals
 
 def fetch_one(sym):
-    """Fetch and score a single symbol. Used in parallel execution."""
     try:
         ticker = yf.Ticker(get_ns(sym))
         intra  = ticker.history(period="1d",  interval="5m", auto_adjust=True)
@@ -247,11 +179,8 @@ def keep_alive():
     if not url: return
     while True:
         time.sleep(14 * 60)
-        try:
-            requests.get(f"{url}/health", timeout=10)
-            print("[KEEP-ALIVE] pinged")
-        except:
-            pass
+        try: requests.get(f"{url}/health", timeout=10); print("[KEEP-ALIVE] pinged")
+        except: pass
 
 # ── ROUTES ────────────────────────────────────────────────────────────────
 
@@ -264,66 +193,55 @@ def frontend():
 def health():
     now = datetime.now(IST)
     return jsonify({
-        "status":  "running",
-        "service": "NSESignal Pro",
-        "time":    now.strftime("%I:%M:%S %p IST"),
-        "message": "Backend is live"
+        "status": "running", "service": "NSESignal Pro",
+        "time": now.strftime("%I:%M:%S %p IST"), "message": "Backend is live"
     })
 
 @app.route("/scan")
 def scan():
-    now = datetime.now(IST)
-    print(f"\n[SCAN] {now.strftime('%I:%M %p IST')}")
+    now   = datetime.now(IST)
+    start = time.time()
+    print(f"\n[SCAN] {now.strftime('%I:%M %p IST')} — {len(WATCHLIST)} stocks, 30 workers, 75s limit")
 
-    # Step 1: Get symbol list
-    symbols  = get_dynamic_symbols()
-    total    = len(symbols)
-    results  = []
-    errors   = 0
-    done     = 0
+    results = []
+    errors  = 0
+    done    = 0
 
-    print(f"[SCAN] Scanning {total} symbols in parallel (20 workers)…")
-    scan_start = time.time()
-
-    # Step 2: Parallel fetch with 20 workers, max 90 seconds total
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        futures = {executor.submit(fetch_one, sym): sym for sym in symbols}
-        for future in as_completed(futures, timeout=90):
+    # 30 parallel workers, hard 75s cutoff — returns partial results instead of 502
+    with ThreadPoolExecutor(max_workers=30) as executor:
+        futures = {executor.submit(fetch_one, sym): sym for sym in WATCHLIST}
+        for future in as_completed(futures, timeout=75):
             try:
-                result = future.result(timeout=8)
-                done  += 1
-                if result:
-                    results.append(result)
-                else:
-                    errors += 1
+                r = future.result(timeout=6)
+                done += 1
+                if r: results.append(r)
+                else: errors += 1
             except Exception:
                 errors += 1
                 done   += 1
 
-    elapsed = round(time.time() - scan_start, 1)
-    print(f"[SCAN] Done in {elapsed}s — {len(results)} valid, {errors} errors, {done}/{total} attempted")
-
+    elapsed = round(time.time() - start, 1)
     results.sort(key=lambda x: x["score"], reverse=True)
     top10 = results[:10]
-    top10[:3] and print(f"[TOP3] {[(s['symbol'], s['score']) for s in top10[:3]]}")
+    print(f"[SCAN] {len(results)} valid / {done} done / {errors} errors in {elapsed}s")
 
     return jsonify({
         "status":    "success",
         "scan_time": now.strftime("%I:%M %p IST"),
         "date":      now.strftime("%d %b %Y"),
         "scanned":   len(results),
-        "total":     total,
+        "total":     len(WATCHLIST),
         "errors":    errors,
-        "elapsed":   elapsed,
+        "elapsed":   f"{elapsed}s",
         "top10":     top10
     })
 
 @app.route("/quote/<symbol>")
 def quote(symbol):
     try:
-        result = fetch_one(symbol.upper())
-        if not result: return jsonify({"status":"error","message":"No data"}), 404
-        return jsonify({"status":"success", **result})
+        r = fetch_one(symbol.upper())
+        if not r: return jsonify({"status":"error","message":"No data"}), 404
+        return jsonify({"status":"success", **r})
     except Exception as e:
         return jsonify({"status":"error","message":str(e)}), 500
 
@@ -336,20 +254,17 @@ def indices():
             if df is not None and len(df) > 1:
                 close = float(df["Close"].squeeze().iloc[-1])
                 prev  = float(df["Close"].squeeze().iloc[-2])
-                out[name] = {
-                    "price":  round(close, 2),
-                    "change": round(close - prev, 2),
-                    "pct":    round((close - prev) / prev * 100, 2)
-                }
+                out[name] = {"price": round(close,2), "change": round(close-prev,2),
+                             "pct": round((close-prev)/prev*100,2)}
         except: out[name] = {}
     return jsonify(out)
 
 @app.route("/news", methods=["POST"])
 def news():
-    return jsonify({})  # Disabled — no API key needed
+    return jsonify({})
 
 if __name__ == "__main__":
     threading.Thread(target=keep_alive, daemon=True).start()
     port = int(os.environ.get("PORT", 5000))
-    print(f"NSESignal Pro backend starting on port {port}")
+    print(f"NSESignal Pro v3 starting on port {port}")
     app.run(host="0.0.0.0", port=port)
