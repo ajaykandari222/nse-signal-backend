@@ -133,6 +133,9 @@
     <button class="tabbtn" id="tab-long" onclick="switchTab('long')">
       🌱 Long-Term <span class="tabsub">1 year+ value picks</span>
     </button>
+    <button class="tabbtn" id="tab-analyse" onclick="switchTab('analyse')">
+      🔍 My Stock <span class="tabsub">BUY / HOLD / SELL</span>
+    </button>
   </div>
 
   <!-- ══════════════ SHORT-TERM TAB ══════════════ -->
@@ -165,7 +168,7 @@
   <div class="summary" id="summary" style="display:none;">
     <div class="sum-cell"><div class="sum-label">Stocks Scanned</div><div class="sum-val" id="sumScanned" style="color:#3d9bff">—</div></div>
     <div class="sum-cell"><div class="sum-label">Top Picks</div><div class="sum-val" id="sumPicks" style="color:#00e5a0">—</div></div>
-    <div class="sum-cell"><div class="sum-label">NIFTY Today</div><div class="sum-val" id="sumNifty" style="color:#8b5cf6">—</div></div>
+    <div class="sum-cell"><div class="sum-label">NIFTY Regime</div><div class="sum-val" id="sumNifty" style="color:#8b5cf6">—</div></div>
     <div class="sum-cell"><div class="sum-label">Scan Time</div><div class="sum-val" id="sumTime" style="color:#f59e0b;font-size:12px">—</div></div>
   </div>
 
@@ -241,6 +244,137 @@
   </div>
 
   </div> <!-- end panel-long -->
+
+  <!-- ══════════════ MY STOCK ANALYSIS TAB ══════════════ -->
+  <div id="panel-analyse" class="tabpanel" style="display:none;">
+
+  <div style="text-align:center;padding:16px 0 12px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:4px;text-transform:uppercase;color:#3d9bff;margin-bottom:6px;">Technical + Fundamental + Market Regime</div>
+    <h2 style="font-size:clamp(16px,3vw,22px);font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;">
+      Analyse <span style="background:linear-gradient(90deg,#3d9bff,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Any NSE Stock</span>
+    </h2>
+    <p style="font-size:12px;color:#6888a8;max-width:480px;margin:0 auto;line-height:1.7;">
+      Enter any NSE symbol. Get BUY / HOLD / SELL verdict with full technical + fundamental breakdown — all indicators in one view.
+    </p>
+  </div>
+
+  <!-- Search bar -->
+  <div style="background:#080f1c;border:1px solid rgba(61,155,255,0.25);border-radius:12px;padding:20px 22px;margin-bottom:16px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <input id="stockInput" type="text" placeholder="Enter NSE symbol  e.g. RELIANCE, TCS, ZOMATO"
+        style="flex:1;min-width:200px;background:#0c1526;border:1px solid #112038;border-radius:8px;
+        padding:12px 16px;color:#ddeeff;font-family:'IBM Plex Mono',monospace;font-size:13px;
+        outline:none;transition:border 0.2s;"
+        onkeydown="if(event.key==='Enter') analyseStock()"
+        onfocus="this.style.borderColor='#3d9bff'"
+        onblur="this.style.borderColor='#112038'" />
+      <button onclick="analyseStock()" id="analyseBtn"
+        style="background:linear-gradient(135deg,#3d9bff,#8b5cf6);color:#fff;border:none;
+        border-radius:9px;padding:12px 28px;font-family:'Inter',sans-serif;font-weight:800;
+        font-size:14px;cursor:pointer;white-space:nowrap;
+        box-shadow:0 4px 20px rgba(61,155,255,0.3);transition:all 0.18s;">
+        🔍 Analyse
+      </button>
+    </div>
+    <!-- Quick picks -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;">Quick:</span>
+      <span id="qPicksRow"></span>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="aProgWrap" style="display:none;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-bottom:4px;">
+      <span id="aProgLbl">Fetching data…</span><span id="aProgPct">0%</span>
+    </div>
+    <div style="height:3px;background:#112038;border-radius:2px;overflow:hidden;">
+      <div id="aProgFill" style="height:100%;width:0%;background:linear-gradient(90deg,#3d9bff,#8b5cf6);border-radius:2px;transition:width 0.5s ease;"></div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="aErrorBox" class="error-box" style="display:none;"></div>
+
+  <!-- Result -->
+  <div id="aResult" style="display:none;">
+
+    <!-- Verdict banner -->
+    <div id="aVerdict" style="border-radius:12px;padding:20px 22px;margin-bottom:14px;text-align:center;">
+      <div id="aVerdictIcon" style="font-size:48px;margin-bottom:8px;"></div>
+      <div id="aVerdictLabel" style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:800;letter-spacing:2px;margin-bottom:6px;"></div>
+      <div id="aSymbolLine" style="font-family:'IBM Plex Mono',monospace;font-size:12px;margin-bottom:10px;"></div>
+      <div id="aVerdictSummary" style="font-size:13px;color:#ddeeff;max-width:500px;margin:0 auto;line-height:1.7;"></div>
+    </div>
+
+    <!-- Score gauges -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      <div id="aTechGauge" class="sum-cell" style="border-radius:10px;"></div>
+      <div id="aFundGauge" class="sum-cell" style="border-radius:10px;"></div>
+      <div id="aCombGauge" class="sum-cell" style="border-radius:10px;"></div>
+    </div>
+
+    <!-- Price + Target + SL -->
+    <div style="background:#080f1c;border:1px solid #112038;border-radius:10px;padding:16px;margin-bottom:14px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:10px;">Price Action</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="aPriceGrid"></div>
+    </div>
+
+    <!-- Two-column: Technical + Fundamental -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+
+      <!-- Technical signals -->
+      <div style="background:#080f1c;border:1px solid #112038;border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:8px;">Technical Indicators</div>
+        <div id="aTechGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:6px;margin-top:4px;">Signals</div>
+        <div id="aTechSignals" class="signals-box" style="max-height:160px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Fundamental signals -->
+      <div style="background:#080f1c;border:1px solid #112038;border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:8px;">Fundamental Metrics</div>
+        <div id="aFundGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:6px;margin-top:4px;">Signals</div>
+        <div id="aFundSignals" class="signals-box" style="max-height:160px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- Key reasons -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="background:rgba(0,229,160,0.04);border:1px solid rgba(0,229,160,0.2);border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#00e5a0;margin-bottom:8px;">✓ Reasons to BUY</div>
+        <div id="aBullReasons"></div>
+      </div>
+      <div style="background:rgba(255,77,109,0.04);border:1px solid rgba(255,77,109,0.2);border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#ff4d6d;margin-bottom:8px;">✗ Reasons to AVOID</div>
+        <div id="aBearReasons"></div>
+      </div>
+    </div>
+
+    <!-- TradingView links -->
+    <div class="tv-box">
+      <div class="tv-title">● Verify on TradingView</div>
+      <div class="tv-links" id="aTVLinks"></div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div style="margin-top:12px;font-size:10px;color:#3d5878;line-height:1.7;padding:10px 14px;border-left:3px solid #f59e0b;background:rgba(245,158,11,0.03);border-radius:0 6px 6px 0;">
+      <b style="color:#f59e0b">Note:</b> BUY/HOLD/SELL is a data-driven signal based on technical and fundamental indicators — not personalised investment advice. Always verify on your broker terminal and consider your own risk tolerance before trading. Not SEBI-registered.
+    </div>
+  </div>
+
+  <!-- Idle -->
+  <div id="aIdle" style="text-align:center;padding:36px 16px;">
+    <div style="font-size:36px;opacity:0.15;margin-bottom:12px;">🔍</div>
+    <p style="font-size:12px;color:#6888a8;line-height:1.9;max-width:420px;margin:0 auto;">
+      Type any NSE symbol above and press <b style="color:#ddeeff">Analyse</b>.<br>
+      Gets live price, computes all 10+ indicators, checks fundamentals, and gives you a clear <b style="color:#ddeeff">BUY / HOLD / SELL</b> verdict with full reasoning.
+    </p>
+  </div>
+
+  </div> <!-- end panel-analyse -->
+
 </div> <!-- end main -->
 
 <script>
@@ -281,8 +415,8 @@ function showError(msg){const b=document.getElementById("errorBox");b.innerHTML=
 function hideError(){document.getElementById("errorBox").style.display="none";}
 
 function gradeInfo(score){
-  // Score is out of 12
-  const g=score>=9.5?"A+":score>=7.5?"A":score>=5.5?"B":score>=3.5?"C":"D";
+  // Score is out of 17
+  const g=score>=12?"A+":score>=9?"A":score>=6.5?"B":score>=4?"C":"D";
   const c={A:["#00e5a0","rgba(0,229,160,0.12)"],"A+":["#00e5a0","rgba(0,229,160,0.12)"],
            B:["#f59e0b","rgba(245,158,11,0.12)"],C:["#6888a8","rgba(104,136,168,0.12)"],
            D:["#ff4d6d","rgba(255,77,109,0.12)"]}[g]||["#6888a8","transparent"];
@@ -317,12 +451,14 @@ function renderCard(s,rank){
   const dirIcon  = s.direction==="BULLISH"?"▲":s.direction==="BEARISH"?"▼":"●";
   const badges=[
     `<span class="tag" style="background:${dirColor}25;border:1px solid ${dirColor}55;color:${dirColor};font-weight:800">${dirIcon} ${s.direction||"NEUTRAL"}</span>`,
-    `<span class="tag" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">SCORE ${s.score}/12</span>`,
+    `<span class="tag" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">SCORE ${s.score}/17</span>`,
     s.supertrend_bull?`<span class="tag" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#8b5cf6">ST▲</span>`:"",
     s.adx_strong&&s.adx_bullish?`<span class="tag" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b">ADX ${s.adx}</span>`:"",
     s.macd_bullish?`<span class="tag" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff">MACD▲</span>`:"",
     s.above_vwap?`<span class="tag" style="background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);color:#00e5a0">VWAP↑</span>`:"",
     s.rel_volume>=1.5?`<span class="tag" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b">VOL ${s.rel_volume}x</span>`:"",
+    s.breakout_setup?`<span class="tag" style="background:rgba(0,229,160,0.15);border:1px solid rgba(0,229,160,0.4);color:#00e5a0;font-weight:800">🚀 BREAKOUT</span>`:"",
+    s.stoch_rsi_bounce?`<span class="tag" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#8b5cf6">SRSI↑</span>`:"",
   ].join("");
 
   const m1=[
@@ -338,11 +474,12 @@ function renderCard(s,rank){
 
   const m2=[
     ["Supertrend",s.supertrend_bull?"BULLISH":"BEARISH",s.supertrend_bull?"#8b5cf6":"#ff4d6d"],
-    ["ADX",`${s.adx||"—"} (${s.adx_bullish?"DI+>DI-":"DI->DI+"})`,s.adx_strong?"#f59e0b":"#6888a8"],
+    ["ADX",`${s.adx||"—"} ${s.adx_bullish?"DI+>DI-":"DI->DI+"}`,s.adx_strong?"#f59e0b":"#6888a8"],
+    ["StochRSI K/D",s.stoch_rsi_k!=null?`${s.stoch_rsi_k}/${s.stoch_rsi_d}`:"—",s.stoch_rsi_bull?"#8b5cf6":"#6888a8"],
     ["ATR (14)",fmtPr(s.atr),"#6888a8"],
-    ["Score",`${s.score}/12`,s.score>=9?"#00e5a0":s.score>=7?"#3d9bff":s.score>=5?"#f59e0b":"#ff4d6d"],
     ["52W High",fmtPr(s.week52_high),"#6888a8"],
-    ["52W Low",fmtPr(s.week52_low),"#6888a8"],
+    ["% From 52W",`${s.pct_from_52h||0}%`,s.breakout_setup?"#00e5a0":s.near_52w_high?"#3d9bff":"#6888a8"],
+    ["Score",`${s.score}/17`,s.score>=12?"#00e5a0":s.score>=9?"#3d9bff":s.score>=6?"#f59e0b":"#ff4d6d"],
   ].map(([l,v,c])=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-val" style="color:${c};font-size:11px">${v}</div></div>`).join("");
 
   const signals=(s.signals||[]).map(sig=>{
@@ -492,17 +629,19 @@ async function runScan(){
     addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks scanned in ${sd.elapsed||"—"}`);
     addLog(`[✓] NIFTY today: ${sd.nifty_change>=0?"+":""}${sd.nifty_change||0}%`);
     sd.top10.forEach((s,i)=>
-      addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | ADX:${s.adx} | ST:${s.supertrend_bull?"▲":"▼"} | Score:${s.score}/15`)
+      addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | ADX:${s.adx} | ST:${s.supertrend_bull?"▲":"▼"} | Score:${s.score}/17`)
     );
 
     stocks=sd.top10;
     document.getElementById("sumScanned").textContent=`${sd.scanned}/${sd.total||sd.scanned}`;
     document.getElementById("sumPicks").textContent=sd.top10.length;
-    document.getElementById("sumNifty").textContent=`${sd.nifty_change>=0?"+":""}${sd.nifty_change||0}%`;
-    document.getElementById("sumNifty").style.color=sd.nifty_change>=0?"#00e5a0":"#ff4d6d";
+    const regime=sd.market_regime||{};
+    const rColor=regime.trend==="BULL"?"#00e5a0":regime.trend==="BEAR"?"#ff4d6d":"#f59e0b";
+    document.getElementById("sumNifty").textContent=`${regime.trend||"NEUTRAL"} ${sd.nifty_change>=0?"+":""}${sd.nifty_change||0}%`;
+    document.getElementById("sumNifty").style.color=rColor;
     document.getElementById("sumTime").textContent=sd.scan_time;
     document.getElementById("summary").style.display="grid";
-    document.getElementById("scanSub").textContent=`${sd.scanned} stocks · ${sd.scan_time} · score /12 · refreshes every 5 min`;
+    document.getElementById("scanSub").textContent=`${sd.scanned} stocks · ${sd.scan_time} · score /17 · refreshes every 5 min`;
 
     renderPicks();
     setProg(100,"Complete");
@@ -727,7 +866,7 @@ async function runLtScan(){
     document.getElementById("ltSumPeg").textContent=avgPeg;
     document.getElementById("ltSumTime").textContent=sd.scan_time;
     document.getElementById("ltSummary").style.display="grid";
-    document.getElementById("ltScanSub").textContent=`${sd.scanned} stocks analysed · ${sd.scan_time} · score /15 · refreshes every 6 hrs`;
+    document.getElementById("ltScanSub").textContent=`${sd.scanned} stocks analysed · ${sd.scan_time} · score /17 · refreshes every 6 hrs`;
 
     renderLtPicks();
     ltSetProg(100,"Complete");
@@ -743,7 +882,199 @@ async function runLtScan(){
   btn.disabled=false;
 }
 
+
+// ═══════════════════════════════════════════════════════
+// TAB SWITCH — add analyse tab
+// ═══════════════════════════════════════════════════════
+const origSwitch = switchTab;
+function switchTab(tab){
+  ["short","long","analyse"].forEach(t=>{
+    document.getElementById("tab-"+t)?.classList.toggle("active", t===tab);
+    const p = document.getElementById("panel-"+t);
+    if(p) p.style.display = t===tab?"block":"none";
+  });
+  // Update hero text per tab
+  const heroMap = {
+    short:   ["RSI · MACD · Supertrend · ADX · StochRSI · 52W Breakout", "NSE Stocks With <span class='grad'>Best Technical Setup</span>"],
+    long:    ["P/E · PEG · ROE · Growth · Debt · FCF · Promoter Holding",  "NSE Stocks With <span class='grad'>Long-Term Value Potential</span>"],
+    analyse: ["Technical + Fundamental + Market Regime + Promoter",          "Analyse <span class='grad'>Any NSE Stock</span>"],
+  };
+  if(heroMap[tab]){
+    const el = document.getElementById("heroSub");
+    const h1 = document.getElementById("heroTitle");
+    const p  = document.getElementById("heroDesc");
+    if(el) el.textContent = heroMap[tab][0];
+    if(h1) h1.innerHTML  = heroMap[tab][1];
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MY STOCK ANALYSIS
+// ═══════════════════════════════════════════════════════
+function setAProg(pct, lbl){
+  const f = document.getElementById("aProgFill");
+  const p = document.getElementById("aProgPct");
+  const l = document.getElementById("aProgLbl");
+  if(f) f.style.width = pct+"%";
+  if(p) p.textContent = pct+"%";
+  if(l && lbl!==undefined) l.textContent = lbl;
+}
+
+function metricBox(label, value, color){
+  return `<div class="metric"><div class="metric-label">${label}</div><div class="metric-val" style="color:${color||"#ddeeff"};font-size:12px">${value}</div></div>`;
+}
+
+function signalHtml(sig){
+  const good=sig.includes("✓"), bad=sig.includes("✗");
+  const c=good?"#00e5a0":bad?"#ff4d6d":"#f59e0b";
+  const icon=good?"✓":bad?"✗":"–";
+  return `<div class="signal-row"><span class="sig-icon" style="color:${c}">${icon}</span><span class="sig-text" style="font-size:10px">${sig.replace(" ✓","").replace(" ✗","")}</span></div>`;
+}
+
+function reasonHtml(sig, type){
+  const c = type==="bull"?"#00e5a0":"#ff4d6d";
+  return `<div style="font-size:11px;color:#6888a8;padding:5px 0;border-bottom:1px solid #112038;line-height:1.5;">${sig.replace(" ✓","").replace(" ✗","")}</div>`;
+}
+
+// Populate quick-pick buttons from last scan
+function populateQuickPicks(){
+  const row = document.getElementById("qPicksRow");
+  if(!row) return;
+  // Use stocks from short-term scan if available
+  const syms = stocks.slice(0,5).map(s=>s.symbol);
+  if(!syms.length) return;
+  row.innerHTML = syms.map(s=>
+    `<span onclick="document.getElementById('stockInput').value='${s}';analyseStock()"
+      style="cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:9px;
+      background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);
+      color:#3d9bff;padding:2px 8px;border-radius:4px;">${s}</span>`
+  ).join("");
+}
+
+async function analyseStock(){
+  const sym = (document.getElementById("stockInput")?.value||"").trim().toUpperCase();
+  if(!sym){ alert("Please enter an NSE symbol"); return; }
+
+  const btn = document.getElementById("analyseBtn");
+  btn.disabled=true; btn.innerHTML="⏳ Analysing…";
+  document.getElementById("aIdle").style.display="none";
+  document.getElementById("aResult").style.display="none";
+  document.getElementById("aProgWrap").style.display="block";
+  document.getElementById("aErrorBox").style.display="none";
+  setAProg(0,"");
+
+  try {
+    setAProg(15, `Fetching live data for ${sym}…`);
+    const r = await fetch(`${BACKEND}/analyse/${sym}`);
+    setAProg(60, "Computing indicators…");
+
+    if(r.status===404){
+      const d=await r.json();
+      throw new Error(d.message||`${sym} not found. Check the NSE symbol.`);
+    }
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+
+    const d = await r.json();
+    setAProg(90, "Building analysis…");
+
+    if(d.status==="error") throw new Error(d.message);
+
+    // ── Verdict banner ──
+    const vc = d.verdict_color||"#f59e0b";
+    document.getElementById("aVerdict").style.cssText =
+      `border-radius:12px;padding:20px 22px;margin-bottom:14px;text-align:center;background:${vc}10;border:2px solid ${vc}40;`;
+    document.getElementById("aVerdictIcon").textContent =
+      d.verdict==="BUY"?"▲":d.verdict==="SELL / AVOID"?"▼":"●";
+    document.getElementById("aVerdictIcon").style.color = vc;
+    document.getElementById("aVerdictLabel").textContent = d.verdict;
+    document.getElementById("aVerdictLabel").style.color = vc;
+    document.getElementById("aSymbolLine").innerHTML =
+      `<span style="color:#ddeeff">${d.symbol}</span> · <span style="color:#6888a8">${d.company||""}</span> · <span style="color:#6888a8">${d.sector||""}</span>` +
+      ` · NIFTY <span style="color:${d.regime==="BULL"?"#00e5a0":d.regime==="BEAR"?"#ff4d6d":"#f59e0b"}">${d.regime}</span>`;
+    document.getElementById("aVerdictSummary").textContent = d.verdict_summary;
+
+    // ── Score gauges ──
+    const tColor = d.tech_score>=10?"#00e5a0":d.tech_score>=7?"#3d9bff":d.tech_score>=5?"#f59e0b":"#ff4d6d";
+    const fColor = d.fund_score>=10?"#00e5a0":d.fund_score>=7?"#3d9bff":d.fund_score>=5?"#f59e0b":"#ff4d6d";
+    const cColor = d.verdict==="BUY"?"#00e5a0":d.verdict==="SELL / AVOID"?"#ff4d6d":"#f59e0b";
+    document.getElementById("aTechGauge").innerHTML =
+      `<div class="sum-label">Technical Score</div><div class="sum-val" style="color:${tColor}">${d.tech_score}/17</div>`;
+    document.getElementById("aFundGauge").innerHTML =
+      `<div class="sum-label">Fundamental Score</div><div class="sum-val" style="color:${fColor}">${d.fund_score}/17</div>`;
+    document.getElementById("aCombGauge").innerHTML =
+      `<div class="sum-label">Combined Score</div><div class="sum-val" style="color:${cColor};font-size:22px">${d.combined_score}/17</div>`;
+
+    // ── Price grid ──
+    const dirC = d.direction==="BULLISH"?"#00e5a0":d.direction==="BEARISH"?"#ff4d6d":"#f59e0b";
+    document.getElementById("aPriceGrid").innerHTML = [
+      ["CMP (Live)",    fmtPr(d.cmp),                                       "#ddeeff"],
+      ["Target",        fmtPr(d.target_price)+" ("+(d.target_pct>=0?"+":"")+d.target_pct+"%)", dirC],
+      ["Stop-Loss",     fmtPr(d.stop_loss),                                 "#ff4d6d"],
+      ["Risk:Reward",   d.risk_reward?"1:"+d.risk_reward:"—",               d.risk_reward>=1.5?"#00e5a0":"#f59e0b"],
+    ].map(([l,v,c])=>metricBox(l,v,c)).join("");
+
+    // ── Technical indicators grid ──
+    document.getElementById("aTechGrid").innerHTML = [
+      ["RSI-14",        d.rsi||"—",                                d.rsi>=45&&d.rsi<=72?"#00e5a0":"#ff4d6d"],
+      ["StochRSI K",    d.stoch_rsi_k||"—",                       d.stoch_rsi_k<80&&d.stoch_rsi_k>d.stoch_rsi_d?"#8b5cf6":"#6888a8"],
+      ["MACD Hist",     d.macd_hist?.toFixed(3)||"—",             d.macd_hist>=0?"#00e5a0":"#ff4d6d"],
+      ["Supertrend",    d.supertrend_bull?"BULL":"BEAR",           d.supertrend_bull?"#8b5cf6":"#ff4d6d"],
+      ["ADX",           d.adx||"—",                               d.adx>=25?"#f59e0b":"#6888a8"],
+      ["VWAP",          d.above_vwap?"ABOVE":"BELOW",             d.above_vwap?"#00e5a0":"#ff4d6d"],
+      ["EMA Cross",     d.golden_cross?"GOLDEN":"DEATH",          d.golden_cross?"#00e5a0":"#ff4d6d"],
+      ["Volume",        d.rel_volume+"x avg",                     d.rel_volume>=1.5?"#00e5a0":"#6888a8"],
+    ].map(([l,v,c])=>metricBox(l,v,c)).join("");
+
+    // ── Fundamental grid ──
+    document.getElementById("aFundGrid").innerHTML = [
+      ["P/E Ratio",     d.pe||"—",                                d.pe&&d.pe<=20?"#00e5a0":"#6888a8"],
+      ["PEG Ratio",     d.peg||"—",                               d.peg&&d.peg<=1.5?"#00e5a0":"#6888a8"],
+      ["ROE %",         d.roe?d.roe+"%":"—",                      d.roe&&d.roe>=15?"#00e5a0":"#6888a8"],
+      ["Debt/Equity",   d.debt_equity||"—",                       d.debt_equity&&d.debt_equity<=0.5?"#00e5a0":d.debt_equity>1.5?"#ff4d6d":"#6888a8"],
+      ["EPS Growth",    d.earnings_growth?d.earnings_growth+"%":"—", d.earnings_growth&&d.earnings_growth>=15?"#00e5a0":"#6888a8"],
+      ["Rev Growth",    d.revenue_growth?d.revenue_growth+"%":"—",  d.revenue_growth&&d.revenue_growth>=10?"#00e5a0":"#6888a8"],
+      ["Promoter",      d.promoter_holding?d.promoter_holding+"%":"—", d.promoter_holding&&d.promoter_holding>=50?"#00e5a0":"#6888a8"],
+      ["Analyst ↑",     d.analyst_upside!=null?"+"+d.analyst_upside+"%":"—", d.analyst_upside&&d.analyst_upside>=15?"#00e5a0":"#6888a8"],
+    ].map(([l,v,c])=>metricBox(l,v,c)).join("");
+
+    // ── Signals ──
+    document.getElementById("aTechSignals").innerHTML = (d.tech_signals||[]).map(s=>signalHtml(s)).join("");
+    document.getElementById("aFundSignals").innerHTML = (d.fund_signals||[]).map(s=>signalHtml(s)).join("");
+
+    // ── Reasons ──
+    document.getElementById("aBullReasons").innerHTML = (d.bullish_reasons||[]).length
+      ? d.bullish_reasons.map(s=>reasonHtml(s,"bull")).join("")
+      : `<div style="font-size:11px;color:#3d5878;">No strong bullish signals found</div>`;
+    document.getElementById("aBearReasons").innerHTML = (d.bearish_reasons||[]).length
+      ? d.bearish_reasons.map(s=>reasonHtml(s,"bear")).join("")
+      : `<div style="font-size:11px;color:#3d5878;">No major bearish signals found</div>`;
+
+    // ── TradingView links ──
+    document.getElementById("aTVLinks").innerHTML = [
+      [`📈 Live Chart`, `https://www.tradingview.com/chart/?symbol=NSE:${d.symbol}`],
+      [`📊 Technicals`, `https://www.tradingview.com/symbols/NSE-${d.symbol}/technicals/`],
+      [`📋 Screener.in`, `https://www.screener.in/company/${d.symbol}/`],
+    ].map(([l,u])=>`<a class="tv-link" href="${u}" target="_blank">${l} ↗</a>`).join("");
+
+    setAProg(100,"Complete");
+    document.getElementById("aResult").style.display="block";
+
+  } catch(err){
+    const eb = document.getElementById("aErrorBox");
+    eb.innerHTML = `<b>Error:</b> ${err.message}`;
+    eb.style.display="block";
+    setAProg(0,"");
+  }
+
+  document.getElementById("aProgWrap").style.display="none";
+  btn.disabled=false;
+  btn.innerHTML="🔍 Analyse";
+}
+
 fetchIndices();
+// Populate quick picks after a short delay if scan was already done
+setTimeout(populateQuickPicks, 2000);
+
 </script>
 </body>
 </html>
