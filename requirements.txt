@@ -6,3 +6,4 @@ ta
 gunicorn
 pytz
 requests
+anthropic
