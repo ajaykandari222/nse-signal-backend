@@ -1,9 +1,0 @@
-flask
-flask-cors
-yfinance
-pandas
-ta
-gunicorn
-pytz
-requests
-anthropic
