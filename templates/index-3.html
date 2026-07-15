@@ -1,0 +1,1942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSESignal Pro</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#04070e;color:#ddeeff;font-family:'Inter',sans-serif;min-height:100vh;}
+  ::-webkit-scrollbar{width:4px;}
+  ::-webkit-scrollbar-track{background:#050a14;}
+  ::-webkit-scrollbar-thumb{background:#112038;border-radius:2px;}
+  .topbar{background:#060b16;border-bottom:1px solid #112038;padding:0 16px;height:48px;
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+  .logo{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:#00e5a0;box-shadow:0 0 8px #00e5a0;animation:pulse 1.4s infinite;}
+  .badge{font-size:8px;padding:2px 8px;border-radius:10px;font-family:'IBM Plex Mono',monospace;}
+  .indices{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  .idx{font-family:'IBM Plex Mono',monospace;font-size:9px;}
+  .clock{font-family:'IBM Plex Mono',monospace;font-size:10px;color:#3d5878;}
+  .main{max-width:980px;margin:0 auto;padding:18px 14px 60px;}
+  .hero{text-align:center;padding:18px 0 14px;}
+  .hero-sub{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:4px;text-transform:uppercase;color:#00e5a0;margin-bottom:7px;}
+  .hero h1{font-size:clamp(18px,4vw,28px);font-weight:800;letter-spacing:-0.8px;line-height:1.15;margin-bottom:8px;}
+  .hero p{font-size:12px;color:#6888a8;max-width:540px;margin:0 auto;line-height:1.75;}
+  .grad{background:linear-gradient(90deg,#00e5a0,#3d9bff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+
+  /* indicator pills */
+  .ind-pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:12px 0 16px;}
+
+  /* tab navigation */
+  .tabnav{display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid #112038;padding-bottom:0;}
+  .tabbtn{flex:1;background:transparent;border:none;border-bottom:3px solid transparent;color:#3d5878;
+    padding:12px 16px;font-family:'Inter',sans-serif;font-weight:700;font-size:13px;cursor:pointer;
+    transition:all 0.2s;display:flex;flex-direction:column;align-items:center;gap:2px;}
+  .tabbtn:hover{color:#6888a8;}
+  .tabbtn.active{color:#ddeeff;border-bottom-color:#00e5a0;}
+  .tabbtn:nth-child(2).active{border-bottom-color:#8b5cf6;}
+  .tabsub{font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:400;color:#3d5878;}
+  .tabpanel{animation:fadein 0.3s ease;}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  .pill{font-size:9px;padding:3px 10px;border-radius:10px;font-family:'IBM Plex Mono',monospace;font-weight:700;}
+
+  .scanbox{background:#080f1c;border:1px solid rgba(0,229,160,0.18);border-radius:12px;padding:18px 22px;text-align:center;margin-bottom:14px;}
+  .btn{background:linear-gradient(135deg,#00e5a0,#00c87a);color:#000;border:none;border-radius:9px;padding:13px 44px;font-family:'Inter',sans-serif;font-weight:800;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:9px;box-shadow:0 4px 20px rgba(0,229,160,0.22);transition:all 0.18s;}
+  .btn:disabled{background:rgba(0,229,160,0.25);box-shadow:none;cursor:not-allowed;}
+  .btn-sub{font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-top:8px;}
+  .spinner{width:13px;height:13px;border:2px solid rgba(0,0,0,0.25);border-top-color:#000;border-radius:50%;display:inline-block;animation:spin 0.65s linear infinite;}
+  .prog-wrap{margin-bottom:12px;}
+  .prog-bar{height:3px;background:#112038;border-radius:2px;overflow:hidden;}
+  .prog-fill{height:100%;background:linear-gradient(90deg,#00e5a0,#3d9bff);border-radius:2px;transition:width 0.6s ease;}
+  .prog-lbl{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-bottom:4px;}
+  .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#112038;border-radius:10px;overflow:hidden;margin-bottom:14px;}
+  .sum-cell{background:#080f1c;padding:10px 12px;text-align:center;}
+  .sum-label{font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:3px;}
+  .sum-val{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:700;}
+  .error-box{background:rgba(255,77,109,0.05);border:1px solid rgba(255,77,109,0.22);border-radius:8px;padding:11px 14px;margin-bottom:12px;font-size:12px;color:#ff4d6d;line-height:1.7;}
+
+  /* cards */
+  .card{background:#080f1c;border:1px solid #112038;border-radius:12px;overflow:hidden;margin-bottom:10px;transition:box-shadow 0.3s;}
+  .card.open{box-shadow:0 0 24px rgba(0,229,160,0.06);}
+  .card-header{display:grid;grid-template-columns:50px 1fr 115px;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;}
+  .rank{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;text-align:center;line-height:1;}
+  .grade{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:4px auto 0;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:800;}
+  .sym{font-family:'IBM Plex Mono',monospace;font-size:16px;font-weight:800;}
+  .badges{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;}
+  .tag{font-size:8px;padding:2px 7px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-weight:700;}
+  .rsi-bar{display:flex;align-items:center;gap:8px;margin-top:5px;}
+  .rsi-track{flex:1;height:3px;background:#112038;border-radius:2px;overflow:hidden;}
+  .rsi-fill{height:100%;border-radius:2px;transition:width 1s ease;}
+  .rsi-val{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;min-width:28px;}
+  .price-col{text-align:right;}
+  .cmp{font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:#ddeeff;}
+  .chg{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;}
+  .hl{font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-top:2px;}
+  .chevron{font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-top:4px;}
+
+  /* expanded */
+  .card-body{border-top:1px solid #112038;padding:14px 16px 18px;}
+  .section-title{font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:6px;}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:12px;}
+  .metric-wide{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px;}
+  .metric{background:#0c1526;border-radius:7px;padding:9px 10px;}
+  .metric-label{font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:1.5px;text-transform:uppercase;color:#3d5878;margin-bottom:3px;}
+  .metric-val{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:700;}
+  .signals-box{background:#0c1526;border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+  .signal-row{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #112038;align-items:flex-start;}
+  .signal-row:last-child{border-bottom:none;}
+  .sig-icon{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;min-width:10px;}
+  .sig-text{font-size:11px;color:#6888a8;line-height:1.5;}
+  .tv-box{background:rgba(0,229,160,0.04);border:1px solid rgba(0,229,160,0.15);border-radius:8px;padding:12px 14px;}
+  .tv-title{font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#00e5a0;margin-bottom:8px;}
+  .tv-links{display:flex;gap:7px;flex-wrap:wrap;}
+  .tv-link{display:inline-flex;align-items:center;gap:4px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.28);color:#00e5a0;border-radius:6px;padding:7px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;text-decoration:none;}
+  .log-wrap{margin-top:12px;}
+  .log-title{font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:5px;}
+  .log-box{background:#0c1526;border:1px solid #112038;border-radius:8px;padding:9px 11px;font-family:'IBM Plex Mono',monospace;font-size:9px;line-height:1.9;max-height:110px;overflow-y:auto;}
+  .disclaimer{margin-top:24px;padding:11px 14px;border-left:3px solid #f59e0b;background:rgba(245,158,11,0.03);border-radius:0 6px 6px 0;font-size:10px;color:#3d5878;line-height:1.8;}
+  .idle{text-align:center;padding:36px 16px;}
+  .idle-icon{font-size:36px;opacity:0.15;margin-bottom:12px;}
+  .idle p{font-size:12px;color:#6888a8;line-height:1.9;max-width:440px;margin:0 auto;}
+  .picks-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #112038;}
+  .picks-title{font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2.5px;text-transform:uppercase;color:#3d5878;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.15}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">
+    <div class="dot"></div>
+    NSE<span style="color:#00e5a0">Signal</span><span style="color:#8b5cf6;font-size:9px"> PRO v5</span>
+    <span class="badge" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">LIVE · NIFTY 500+</span>
+  </div>
+  <div class="indices" id="indices">
+    <span class="clock" id="clock">--:--:-- IST</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="hero">
+    <div class="hero-sub" id="heroSub">RSI · MACD · Supertrend · ADX · Relative Strength</div>
+    <h1 id="heroTitle">NSE Stocks With <span class="grad">Best Technical Setup</span></h1>
+    <p id="heroDesc">Scans NIFTY 500 + small caps — full market coverage. 6 proven indicators computed from real Yahoo Finance candles. Refreshes every 5 minutes automatically.</p>
+  </div>
+
+  <!-- TAB NAVIGATION -->
+  <div class="tabnav">
+    <button class="tabbtn active" id="tab-short" onclick="switchTab('short')">
+      ⚡ Short-Term <span class="tabsub">2–3 day trades</span>
+    </button>
+    <button class="tabbtn" id="tab-long" onclick="switchTab('long')">
+      🌱 Long-Term <span class="tabsub">1 year+ value picks</span>
+    </button>
+    <button class="tabbtn" id="tab-analyse" onclick="switchTab('analyse')">
+      🔍 My Stock <span class="tabsub">BUY / HOLD / SELL</span>
+    </button>
+    <button class="tabbtn" id="tab-sector" onclick="switchTab('sector')">
+      🌐 Sector Pulse <span class="tabsub">what's booming now</span>
+    </button>
+    <button class="tabbtn" id="tab-mf" onclick="switchTab('mf')">
+      💰 Mutual Funds <span class="tabsub">top 3 per risk category</span>
+    </button>
+  </div>
+
+  <!-- ══════════════ SHORT-TERM TAB ══════════════ -->
+  <div id="panel-short" class="tabpanel">
+
+  <!-- indicator pills -->
+  <div class="ind-pills">
+    <span class="pill" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">RSI-14</span>
+    <span class="pill" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff">MACD</span>
+    <span class="pill" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#8b5cf6">Supertrend</span>
+    <span class="pill" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b">ADX</span>
+    <span class="pill" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">VWAP</span>
+    <span class="pill" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff">EMA 20/50</span>
+    <span class="pill" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b">Volume Spike</span>
+    <span class="pill" style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);color:#ff6b8a">ATR Target</span>
+  </div>
+
+  <div class="scanbox">
+    <button class="btn" id="scanBtn" onclick="runScan()">▶ Run Live Technical Scan</button>
+    <div class="btn-sub" id="scanSub">NIFTY 500 + small caps · cached every 5 min · returns instantly</div>
+  </div>
+
+  <div class="prog-wrap" id="progWrap" style="display:none;">
+    <div class="prog-lbl"><span id="progLbl"></span><span id="progPct">0%</span></div>
+    <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  </div>
+
+  <div class="error-box" id="errorBox" style="display:none;"></div>
+
+  <div class="summary" id="summary" style="display:none;">
+    <div class="sum-cell"><div class="sum-label">Stocks Scanned</div><div class="sum-val" id="sumScanned" style="color:#3d9bff">—</div></div>
+    <div class="sum-cell"><div class="sum-label">Top Picks</div><div class="sum-val" id="sumPicks" style="color:#00e5a0">—</div></div>
+    <div class="sum-cell"><div class="sum-label">NIFTY Regime</div><div class="sum-val" id="sumNifty" style="color:#8b5cf6">—</div></div>
+    <div class="sum-cell"><div class="sum-label">Scan Time</div><div class="sum-val" id="sumTime" style="color:#f59e0b;font-size:12px">—</div></div>
+  </div>
+
+  <div id="picks"></div>
+
+  <div class="log-wrap" id="logWrap" style="display:none;">
+    <div class="log-title">Activity Log</div>
+    <div class="log-box" id="logBox"></div>
+  </div>
+
+  <div class="idle" id="idle">
+    <div class="idle-icon">◎</div>
+    <p>Press <b style="color:#ddeeff">Run Live Technical Scan</b>.<br>
+    Scans NIFTY 500 + small caps using RSI, MACD, Supertrend, ADX, VWAP, EMA, Volume. Results cached every 5 minutes — returns instantly.</p>
+  </div>
+
+  <div class="disclaimer">
+    <b style="color:#f59e0b">Data:</b> Yahoo Finance via Python (~15 min delay). RSI, MACD, Supertrend, ADX computed from real OHLCV candles.
+    Score out of 12 — higher = more indicators aligned bullishly. Realistic win rate for 2–3 day trades: 63–68%. Not SEBI-registered advice. Always verify on broker terminal.
+  </div>
+
+  </div> <!-- end panel-short -->
+
+  <!-- ══════════════ LONG-TERM TAB ══════════════ -->
+  <div id="panel-long" class="tabpanel" style="display:none;">
+
+  <div class="ind-pills">
+    <span class="pill" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">P/E Ratio</span>
+    <span class="pill" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#8b5cf6">PEG Ratio</span>
+    <span class="pill" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff">ROE</span>
+    <span class="pill" style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.25);color:#ff6b8a">Debt/Equity</span>
+    <span class="pill" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b">Earnings Growth</span>
+    <span class="pill" style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);color:#06b6d4">Revenue Growth</span>
+    <span class="pill" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">Free Cash Flow</span>
+    <span class="pill" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#8b5cf6">52W Position</span>
+    <span class="pill" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff">Analyst Target</span>
+  </div>
+
+  <div class="scanbox" style="border-color:rgba(139,92,246,0.18);">
+    <button class="btn" id="ltScanBtn" onclick="runLtScan()" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);box-shadow:0 4px 20px rgba(139,92,246,0.25);">🌱 Run Long-Term Value Scan</button>
+    <div class="btn-sub" id="ltScanSub">Fundamental analysis · P/E, ROE, growth, debt · cached every 6 hours</div>
+  </div>
+
+  <div class="prog-wrap" id="ltProgWrap" style="display:none;">
+    <div class="prog-lbl"><span id="ltProgLbl"></span><span id="ltProgPct">0%</span></div>
+    <div class="prog-bar"><div class="prog-fill" id="ltProgFill" style="width:0%;background:linear-gradient(90deg,#8b5cf6,#3d9bff);"></div></div>
+  </div>
+
+  <div class="error-box" id="ltErrorBox" style="display:none;"></div>
+
+  <div class="summary" id="ltSummary" style="display:none;">
+    <div class="sum-cell"><div class="sum-label">Stocks Analysed</div><div class="sum-val" id="ltSumScanned" style="color:#3d9bff">—</div></div>
+    <div class="sum-cell"><div class="sum-label">Top Picks</div><div class="sum-val" id="ltSumPicks" style="color:#8b5cf6">—</div></div>
+    <div class="sum-cell"><div class="sum-label">Avg PEG</div><div class="sum-val" id="ltSumPeg" style="color:#00e5a0">—</div></div>
+    <div class="sum-cell"><div class="sum-label">Scan Time</div><div class="sum-val" id="ltSumTime" style="color:#f59e0b;font-size:12px">—</div></div>
+  </div>
+
+  <div id="ltPicks"></div>
+
+  <div class="log-wrap" id="ltLogWrap" style="display:none;">
+    <div class="log-title">Activity Log</div>
+    <div class="log-box" id="ltLogBox"></div>
+  </div>
+
+  <div class="idle" id="ltIdle">
+    <div class="idle-icon">🌱</div>
+    <p>Press <b style="color:#ddeeff">Run Long-Term Value Scan</b>.<br>
+    Analyses fundamentals across NIFTY 500 + small caps: P/E, PEG, ROE, Debt/Equity, Earnings & Revenue growth, Free Cash Flow, 52-week position, and analyst targets. Surfaces stocks combining low valuation with strong growth and quality — the closest data-driven proxy for long-term multibagger potential. Cached every 6 hours since fundamentals change slowly.</p>
+  </div>
+
+  <div class="disclaimer" style="border-left-color:#8b5cf6;background:rgba(139,92,246,0.03);">
+    <b style="color:#8b5cf6">Important:</b> No screener can guarantee 2x/3x returns. This surfaces statistical candidates sharing characteristics of past multibaggers — low valuation + high growth + strong balance sheet. Actual outcomes depend on business execution, sector trends, and market conditions over the holding period. Always do your own research, read annual reports, and check promoter holding before investing. Not SEBI-registered investment advice.
+  </div>
+
+  </div> <!-- end panel-long -->
+
+  <!-- ══════════════ MY STOCK ANALYSIS TAB ══════════════ -->
+  <div id="panel-analyse" class="tabpanel" style="display:none;">
+
+  <div style="text-align:center;padding:16px 0 12px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:4px;text-transform:uppercase;color:#3d9bff;margin-bottom:6px;">Technical + Fundamental + Market Regime</div>
+    <h2 style="font-size:clamp(16px,3vw,22px);font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;">
+      Analyse <span style="background:linear-gradient(90deg,#3d9bff,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Any NSE Stock</span>
+    </h2>
+    <p style="font-size:12px;color:#6888a8;max-width:480px;margin:0 auto;line-height:1.7;">
+      Enter any NSE symbol. Get BUY / HOLD / SELL verdict with full technical + fundamental breakdown — all indicators in one view.
+    </p>
+  </div>
+
+  <!-- Search bar -->
+  <div style="background:#080f1c;border:1px solid rgba(61,155,255,0.25);border-radius:12px;padding:20px 22px;margin-bottom:16px;">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <input id="stockInput" type="text" placeholder="Enter NSE symbol  e.g. RELIANCE, TCS, ZOMATO"
+        style="flex:1;min-width:200px;background:#0c1526;border:1px solid #112038;border-radius:8px;
+        padding:12px 16px;color:#ddeeff;font-family:'IBM Plex Mono',monospace;font-size:13px;
+        outline:none;transition:border 0.2s;"
+        onkeydown="if(event.key==='Enter') analyseStock()"
+        onfocus="this.style.borderColor='#3d9bff'"
+        onblur="this.style.borderColor='#112038'" />
+      <button onclick="analyseStock()" id="analyseBtn"
+        style="background:linear-gradient(135deg,#3d9bff,#8b5cf6);color:#fff;border:none;
+        border-radius:9px;padding:12px 28px;font-family:'Inter',sans-serif;font-weight:800;
+        font-size:14px;cursor:pointer;white-space:nowrap;
+        box-shadow:0 4px 20px rgba(61,155,255,0.3);transition:all 0.18s;">
+        🔍 Analyse
+      </button>
+    </div>
+    <!-- Quick picks -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;">Quick:</span>
+      <span id="qPicksRow"></span>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="aProgWrap" style="display:none;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-bottom:4px;">
+      <span id="aProgLbl">Fetching data…</span><span id="aProgPct">0%</span>
+    </div>
+    <div style="height:3px;background:#112038;border-radius:2px;overflow:hidden;">
+      <div id="aProgFill" style="height:100%;width:0%;background:linear-gradient(90deg,#3d9bff,#8b5cf6);border-radius:2px;transition:width 0.5s ease;"></div>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div id="aErrorBox" class="error-box" style="display:none;"></div>
+
+  <!-- Result -->
+  <div id="aResult" style="display:none;">
+
+    <!-- Verdict banner -->
+    <div id="aVerdict" style="border-radius:12px;padding:20px 22px;margin-bottom:14px;text-align:center;">
+      <div id="aVerdictIcon" style="font-size:48px;margin-bottom:8px;"></div>
+      <div id="aVerdictLabel" style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:800;letter-spacing:2px;margin-bottom:6px;"></div>
+      <div id="aSymbolLine" style="font-family:'IBM Plex Mono',monospace;font-size:12px;margin-bottom:10px;"></div>
+      <div id="aVerdictSummary" style="font-size:13px;color:#ddeeff;max-width:500px;margin:0 auto;line-height:1.7;"></div>
+    </div>
+
+    <!-- Score gauges -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      <div id="aTechGauge" class="sum-cell" style="border-radius:10px;"></div>
+      <div id="aFundGauge" class="sum-cell" style="border-radius:10px;"></div>
+      <div id="aCombGauge" class="sum-cell" style="border-radius:10px;"></div>
+    </div>
+
+    <!-- Price + Target + SL -->
+    <div style="background:#080f1c;border:1px solid #112038;border-radius:10px;padding:16px;margin-bottom:14px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:10px;">Price Action</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;" id="aPriceGrid"></div>
+    </div>
+
+    <!-- Two-column: Technical + Fundamental -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+
+      <!-- Technical signals -->
+      <div style="background:#080f1c;border:1px solid #112038;border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:8px;">Technical Indicators</div>
+        <div id="aTechGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:6px;margin-top:4px;">Signals</div>
+        <div id="aTechSignals" class="signals-box" style="max-height:160px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Fundamental signals -->
+      <div style="background:#080f1c;border:1px solid #112038;border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:8px;">Fundamental Metrics</div>
+        <div id="aFundGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:6px;margin-top:4px;">Signals</div>
+        <div id="aFundSignals" class="signals-box" style="max-height:160px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- Key reasons -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="background:rgba(0,229,160,0.04);border:1px solid rgba(0,229,160,0.2);border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#00e5a0;margin-bottom:8px;">✓ Reasons to BUY</div>
+        <div id="aBullReasons"></div>
+      </div>
+      <div style="background:rgba(255,77,109,0.04);border:1px solid rgba(255,77,109,0.2);border-radius:10px;padding:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:#ff4d6d;margin-bottom:8px;">✗ Reasons to AVOID</div>
+        <div id="aBearReasons"></div>
+      </div>
+    </div>
+
+    <!-- TradingView links -->
+    <div class="tv-box">
+      <div class="tv-title">● Verify on TradingView</div>
+      <div class="tv-links" id="aTVLinks"></div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div style="margin-top:12px;font-size:10px;color:#3d5878;line-height:1.7;padding:10px 14px;border-left:3px solid #f59e0b;background:rgba(245,158,11,0.03);border-radius:0 6px 6px 0;">
+      <b style="color:#f59e0b">Note:</b> BUY/HOLD/SELL is a data-driven signal based on technical and fundamental indicators — not personalised investment advice. Always verify on your broker terminal and consider your own risk tolerance before trading. Not SEBI-registered.
+    </div>
+  </div>
+
+  <!-- Idle -->
+  <div id="aIdle" style="text-align:center;padding:36px 16px;">
+    <div style="font-size:36px;opacity:0.15;margin-bottom:12px;">🔍</div>
+    <p style="font-size:12px;color:#6888a8;line-height:1.9;max-width:420px;margin:0 auto;">
+      Type any NSE symbol above and press <b style="color:#ddeeff">Analyse</b>.<br>
+      Gets live price, computes all 10+ indicators, checks fundamentals, and gives you a clear <b style="color:#ddeeff">BUY / HOLD / SELL</b> verdict with full reasoning.
+    </p>
+  </div>
+
+  </div> <!-- end panel-analyse -->
+
+
+  <!-- ══════════════ SECTOR PULSE TAB ══════════════ -->
+  <div id="panel-sector" class="tabpanel" style="display:none;">
+
+  <div style="text-align:center;padding:16px 0 12px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:4px;text-transform:uppercase;color:#f59e0b;margin-bottom:6px;">News Sentiment + Seasonality + Technical Momentum</div>
+    <h2 style="font-size:clamp(16px,3vw,22px);font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;">
+      Which Sectors Are <span style="background:linear-gradient(90deg,#f59e0b,#ff4d6d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Booming Right Now?</span>
+    </h2>
+    <p style="font-size:12px;color:#6888a8;max-width:520px;margin:0 auto;line-height:1.7;">
+      Combines global news sentiment (AI-analysed), India-specific seasonality patterns, and live technical momentum to rank all 15 NSE sectors by boom conviction.
+    </p>
+  </div>
+
+  <!-- How it works -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+    <div style="background:#080f1c;border:1px solid #112038;border-radius:9px;padding:12px 14px;">
+      <div style="font-size:18px;margin-bottom:6px;">📰</div>
+      <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:4px;">News Sentiment (40%)</div>
+      <div style="font-size:10px;color:#6888a8;line-height:1.5;">Claude analyses global macro, India policies, sector catalysts in real time</div>
+    </div>
+    <div style="background:#080f1c;border:1px solid #112038;border-radius:9px;padding:12px 14px;">
+      <div style="font-size:18px;margin-bottom:6px;">📅</div>
+      <div style="font-size:11px;font-weight:700;color:#3d9bff;margin-bottom:4px;">Seasonality (30%)</div>
+      <div style="font-size:10px;color:#6888a8;line-height:1.5;">Calendar patterns — AC stocks in summer, agri in monsoon, FMCG in festive season</div>
+    </div>
+    <div style="background:#080f1c;border:1px solid #112038;border-radius:9px;padding:12px 14px;">
+      <div style="font-size:18px;margin-bottom:6px;">📊</div>
+      <div style="font-size:11px;font-weight:700;color:#00e5a0;margin-bottom:4px;">Technical Momentum (30%)</div>
+      <div style="font-size:10px;color:#6888a8;line-height:1.5;">Live RSI/MACD/Supertrend scores of sector stocks from the short-term scanner</div>
+    </div>
+  </div>
+
+  <!-- Scan button -->
+  <div style="background:#080f1c;border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:18px 22px;margin-bottom:14px;text-align:center;">
+    <button onclick="runSectorPulse()" id="sectorBtn"
+      style="background:linear-gradient(135deg,#f59e0b,#ef4444);color:#000;border:none;border-radius:9px;
+      padding:13px 44px;font-family:'Inter',sans-serif;font-weight:800;font-size:14px;cursor:pointer;
+      display:inline-flex;align-items:center;gap:9px;
+      box-shadow:0 4px 20px rgba(245,158,11,0.3);">
+      🌐 Analyse Sector Pulse
+    </button>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-top:8px;" id="sectorSub">
+      Scans global news + India themes + 15 sectors · Takes ~15 seconds · Run weekly or when major news breaks
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="sProgWrap" style="display:none;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-bottom:4px;">
+      <span id="sProgLbl">Scanning…</span><span id="sProgPct">0%</span>
+    </div>
+    <div style="height:3px;background:#112038;border-radius:2px;overflow:hidden;">
+      <div id="sProgFill" style="height:100%;width:0%;background:linear-gradient(90deg,#f59e0b,#ef4444);border-radius:2px;transition:width 0.5s ease;"></div>
+    </div>
+  </div>
+
+  <div id="sErrorBox" class="error-box" style="display:none;"></div>
+
+  <!-- Market themes banner -->
+  <div id="sThemes" style="display:none;margin-bottom:14px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div style="background:#080f1c;border:1px solid rgba(61,155,255,0.2);border-radius:9px;padding:12px 14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#3d9bff;margin-bottom:6px;">🌍 Global Theme</div>
+        <div id="sGlobalTheme" style="font-size:12px;color:#ddeeff;line-height:1.7;"></div>
+      </div>
+      <div style="background:#080f1c;border:1px solid rgba(245,158,11,0.2);border-radius:9px;padding:12px 14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#f59e0b;margin-bottom:6px;">🇮🇳 India Theme</div>
+        <div id="sIndiaTheme" style="font-size:12px;color:#ddeeff;line-height:1.7;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sector cards -->
+  <div id="sSectors"></div>
+
+  <!-- Idle -->
+  <div id="sIdle" style="text-align:center;padding:40px 16px;">
+    <div style="font-size:36px;opacity:0.15;margin-bottom:12px;">🌐</div>
+    <p style="font-size:12px;color:#6888a8;line-height:1.9;max-width:460px;margin:0 auto;">
+      Press <b style="color:#ddeeff">Analyse Sector Pulse</b>.<br>
+      Claude scans global macro trends, India-specific catalysts, and seasonal patterns to rank all 15 NSE sectors by boom conviction. Best stocks in each booming sector are highlighted.
+    </p>
+  </div>
+
+  <div style="margin-top:20px;padding:11px 14px;border-left:3px solid #f59e0b;background:rgba(245,158,11,0.03);border-radius:0 6px 6px 0;font-size:10px;color:#3d5878;line-height:1.8;">
+    <b style="color:#f59e0b">Note:</b> News sentiment is AI-generated based on Claude's knowledge and may not reflect breaking news from the last few hours. Seasonality patterns are based on historical NSE data and are indicative, not guaranteed. Run this weekly or when major global/India news breaks. Not SEBI-registered investment advice.
+  </div>
+
+  </div> <!-- end panel-sector -->
+
+
+  <!-- ══════════════ MUTUAL FUND TAB ══════════════ -->
+  <div id="panel-mf" class="tabpanel" style="display:none;">
+
+  <div style="text-align:center;padding:16px 0 12px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:4px;text-transform:uppercase;color:#f59e0b;margin-bottom:6px;">
+      Live NAV · 1Y/3Y/5Y Returns · Expense Ratio · Risk Grade
+    </div>
+    <h2 style="font-size:clamp(16px,3vw,22px);font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;">
+      Top Mutual Funds — <span style="background:linear-gradient(90deg,#f59e0b,#00e5a0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">By Risk Category</span>
+    </h2>
+    <p style="font-size:12px;color:#6888a8;max-width:520px;margin:0 auto;line-height:1.75;">
+      Live NAV and returns fetched from AMFI via mfapi.in — no API key needed. Top 3 funds per risk category ranked by risk-adjusted 3-year returns.
+    </p>
+  </div>
+
+  <!-- Risk category pills -->
+  <div class="ind-pills" style="margin-bottom:16px;">
+    <span class="pill" style="background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);color:#ff4d6d;">🔴 High Risk</span>
+    <span class="pill" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;">🟡 Moderate Risk</span>
+    <span class="pill" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);color:#00e5a0;">🟢 Low Risk</span>
+    <span class="pill" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.3);color:#3d9bff;">NAV: mfapi.in</span>
+    <span class="pill" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);color:#8b5cf6;">Returns: Computed</span>
+  </div>
+
+  <!-- Scan button -->
+  <div style="background:#080f1c;border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:18px 22px;margin-bottom:14px;text-align:center;">
+    <button onclick="runMFScan()" id="mfBtn"
+      style="background:linear-gradient(135deg,#f59e0b,#00e5a0);color:#000;border:none;
+      border-radius:9px;padding:13px 44px;font-family:'Inter',sans-serif;font-weight:800;
+      font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:9px;
+      box-shadow:0 4px 20px rgba(245,158,11,0.3);">
+      💰 Fetch Top Mutual Funds
+    </button>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-top:8px;" id="mfSub">
+      Fetches live NAV from AMFI · Computes 1Y/3Y/5Y returns · Ranks by risk-adjusted performance · ~20 seconds
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="mfProgWrap" style="display:none;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-bottom:4px;">
+      <span id="mfProgLbl">Fetching NAV data…</span><span id="mfProgPct">0%</span>
+    </div>
+    <div style="height:3px;background:#112038;border-radius:2px;overflow:hidden;">
+      <div id="mfProgFill" style="height:100%;width:0%;background:linear-gradient(90deg,#f59e0b,#00e5a0);border-radius:2px;transition:width 0.5s ease;"></div>
+    </div>
+  </div>
+
+  <div id="mfErrorBox" class="error-box" style="display:none;"></div>
+
+  <!-- Results -->
+  <div id="mfResults" style="display:none;">
+    <div id="mfTimestamp" style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;text-align:right;margin-bottom:12px;"></div>
+
+    <!-- High Risk -->
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #112038;">
+        <span style="font-size:16px;">🔴</span>
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#ff4d6d;">HIGH RISK</div>
+          <div style="font-size:10px;color:#6888a8;">Small Cap · Mid Cap · Sectoral · Thematic | Horizon: 5+ years | Goal: Maximum growth</div>
+        </div>
+      </div>
+      <div id="mfHighRisk" style="display:grid;gap:8px;"></div>
+    </div>
+
+    <!-- Moderate Risk -->
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #112038;">
+        <span style="font-size:16px;">🟡</span>
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#f59e0b;">MODERATE RISK</div>
+          <div style="font-size:10px;color:#6888a8;">Flexi Cap · Large & Mid Cap · Multi Cap | Horizon: 3-5 years | Goal: Balanced growth</div>
+        </div>
+      </div>
+      <div id="mfModRisk" style="display:grid;gap:8px;"></div>
+    </div>
+
+    <!-- Low Risk -->
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #112038;">
+        <span style="font-size:16px;">🟢</span>
+        <div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#00e5a0;">LOW RISK</div>
+          <div style="font-size:10px;color:#6888a8;">Large Cap · Index · Balanced Advantage · Hybrid | Horizon: 1-3 years | Goal: Steady returns</div>
+        </div>
+      </div>
+      <div id="mfLowRisk" style="display:grid;gap:8px;"></div>
+    </div>
+  </div>
+
+  <!-- Idle -->
+  <div id="mfIdle" style="text-align:center;padding:36px 16px;">
+    <div style="font-size:36px;opacity:0.15;margin-bottom:12px;">💰</div>
+    <p style="font-size:12px;color:#6888a8;line-height:1.9;max-width:440px;margin:0 auto;">
+      Press <b style="color:#ddeeff">Fetch Top Mutual Funds</b>.<br>
+      Gets live NAV from AMFI via mfapi.in, computes 1Y/3Y/5Y CAGR returns, and ranks the top 3 funds in each risk category by risk-adjusted performance.
+    </p>
+  </div>
+
+  <div style="margin-top:20px;padding:11px 14px;border-left:3px solid #f59e0b;background:rgba(245,158,11,0.03);border-radius:0 6px 6px 0;font-size:10px;color:#3d5878;line-height:1.8;">
+    <b style="color:#f59e0b">Important:</b> Past returns do not guarantee future performance. Mutual fund investments are subject to market risks.
+    Read all scheme-related documents carefully before investing. This is for informational purposes only — not SEBI-registered investment advice.
+    NAV data sourced from AMFI via mfapi.in (updated daily).
+  </div>
+
+  </div> <!-- end panel-mf -->
+</div> <!-- end main -->
+
+<script>
+const BACKEND = window.location.origin;
+let logs=[], stocks=[], expanded={};
+
+setInterval(()=>{
+  const ist=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+  const p=n=>String(n).padStart(2,"0");
+  const el=document.getElementById("clock");
+  if(el) el.textContent=`${p(ist.getHours())}:${p(ist.getMinutes())}:${p(ist.getSeconds())} IST`;
+},1000);
+
+const fmtPr =n=>n==null?"—":"₹"+Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
+const fmtPct=n=>n==null?"—":(n>=0?"+":"")+n.toFixed(2)+"%";
+const fmtVol=n=>!n?"—":n>=1e7?(n/1e7).toFixed(1)+"Cr":n>=1e5?(n/1e5).toFixed(1)+"L":Number(n).toLocaleString();
+const sleep =ms=>new Promise(r=>setTimeout(r,ms));
+
+function addLog(msg){
+  logs.push(msg);
+  if(logs.length>80) logs=logs.slice(-80);
+  const box=document.getElementById("logBox");
+  if(box){
+    const c=msg.startsWith("[ERR]")?"#ff4d6d":msg.includes("✓")||msg.startsWith("[✓]")?"#00e5a0":msg.startsWith("[WARN]")?"#f59e0b":"#3d5878";
+    box.innerHTML+=`<div style="color:${c}">${msg}</div>`;
+    box.scrollTop=box.scrollHeight;
+  }
+  document.getElementById("logWrap").style.display="block";
+}
+
+function setProg(pct,lbl){
+  document.getElementById("progFill").style.width=pct+"%";
+  document.getElementById("progPct").textContent=pct+"%";
+  if(lbl!==undefined) document.getElementById("progLbl").textContent=lbl;
+}
+
+function showError(msg){const b=document.getElementById("errorBox");b.innerHTML=`<b>Error:</b> ${msg}`;b.style.display="block";}
+function hideError(){document.getElementById("errorBox").style.display="none";}
+
+function gradeInfo(score){
+  // Score is out of 17
+  const g=score>=12?"A+":score>=9?"A":score>=6.5?"B":score>=4?"C":"D";
+  const c={A:["#00e5a0","rgba(0,229,160,0.12)"],"A+":["#00e5a0","rgba(0,229,160,0.12)"],
+           B:["#f59e0b","rgba(245,158,11,0.12)"],C:["#6888a8","rgba(104,136,168,0.12)"],
+           D:["#ff4d6d","rgba(255,77,109,0.12)"]}[g]||["#6888a8","transparent"];
+  return {grade:g,color:c[0],bg:c[1]};
+}
+
+async function fetchIndices(){
+  try{
+    const r=await fetch(`${BACKEND}/indices`);
+    const d=await r.json();
+    const el=document.getElementById("indices");
+    let html="";
+    [["N",d.nifty],["S",d.sensex],["BN",d.banknifty]].forEach(([label,idx])=>{
+      if(!idx||idx.error)return;
+      const c=idx.pct>=0?"#00e5a0":"#ff4d6d";
+      html+=`<span class="idx"><span style="color:#3d5878">${label} </span><b style="color:#ddeeff">${idx.price?.toLocaleString("en-IN")}</b><span style="color:${c}"> ${idx.pct>=0?"+":""}${idx.pct?.toFixed(2)}%</span></span>`;
+    });
+    html+=`<span class="clock" id="clock">--:--:-- IST</span>`;
+    el.innerHTML=html;
+  }catch(e){}
+}
+
+function renderCard(s,rank){
+  const isOpen=expanded[s.symbol]||false;
+  const up=s.change_pct>=0;
+  const cc=up?"#00e5a0":"#ff4d6d";
+  const gi=gradeInfo(s.score);
+  const rsiColor=s.rsi>=70?"#ff4d6d":s.rsi>=45?"#00e5a0":"#f59e0b";
+  const rankColors=["#00e5a0","#3d9bff","#f59e0b","#5a7090","#3d5070","#6888a8","#8b5cf6","#06b6d4","#3d9bff","#f59e0b"];
+
+  const dirColor = s.direction==="BULLISH"?"#00e5a0":s.direction==="BEARISH"?"#ff4d6d":"#6888a8";
+  const dirIcon  = s.direction==="BULLISH"?"▲":s.direction==="BEARISH"?"▼":"●";
+  const badges=[
+    `<span class="tag" style="background:${dirColor}25;border:1px solid ${dirColor}55;color:${dirColor};font-weight:800">${dirIcon} ${s.direction||"NEUTRAL"}</span>`,
+    `<span class="tag" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">SCORE ${s.score}/17</span>`,
+    s.supertrend_bull?`<span class="tag" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#8b5cf6">ST▲</span>`:"",
+    s.adx_strong&&s.adx_bullish?`<span class="tag" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b">ADX ${s.adx}</span>`:"",
+    s.macd_bullish?`<span class="tag" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff">MACD▲</span>`:"",
+    s.above_vwap?`<span class="tag" style="background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);color:#00e5a0">VWAP↑</span>`:"",
+    s.rel_volume>=1.5?`<span class="tag" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:#f59e0b">VOL ${s.rel_volume}x</span>`:"",
+    s.breakout_setup?`<span class="tag" style="background:rgba(0,229,160,0.15);border:1px solid rgba(0,229,160,0.4);color:#00e5a0;font-weight:800">🚀 BREAKOUT</span>`:"",
+    s.stoch_rsi_bounce?`<span class="tag" style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.3);color:#8b5cf6">SRSI↑</span>`:"",
+  ].join("");
+
+  const m1=[
+    ["CMP",fmtPr(s.cmp),"#ddeeff"],
+    ["Change",fmtPct(s.change_pct),cc],
+    ["VWAP",fmtPr(s.vwap),s.above_vwap?"#00e5a0":"#ff4d6d"],
+    ["Volume",fmtVol(s.volume),s.rel_volume>=1.5?"#00e5a0":"#6888a8"],
+    ["RSI-14",s.rsi||"—",s.rsi>=45&&s.rsi<=72?"#00e5a0":"#ff4d6d"],
+    ["MACD Hist",s.macd_hist?.toFixed(3)||"—",s.macd_hist>=0?"#00e5a0":"#ff4d6d"],
+    ["EMA 20",fmtPr(s.ema20),s.above_ema20?"#00e5a0":"#6888a8"],
+    ["EMA 50",fmtPr(s.ema50),s.golden_cross?"#00e5a0":"#6888a8"],
+  ].map(([l,v,c])=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-val" style="color:${c}">${v}</div></div>`).join("");
+
+  const m2=[
+    ["Supertrend",s.supertrend_bull?"BULLISH":"BEARISH",s.supertrend_bull?"#8b5cf6":"#ff4d6d"],
+    ["ADX",`${s.adx||"—"} ${s.adx_bullish?"DI+>DI-":"DI->DI+"}`,s.adx_strong?"#f59e0b":"#6888a8"],
+    ["StochRSI K/D",s.stoch_rsi_k!=null?`${s.stoch_rsi_k}/${s.stoch_rsi_d}`:"—",s.stoch_rsi_bull?"#8b5cf6":"#6888a8"],
+    ["ATR (14)",fmtPr(s.atr),"#6888a8"],
+    ["52W High",fmtPr(s.week52_high),"#6888a8"],
+    ["% From 52W",`${s.pct_from_52h||0}%`,s.breakout_setup?"#00e5a0":s.near_52w_high?"#3d9bff":"#6888a8"],
+    ["Score",`${s.score}/17`,s.score>=12?"#00e5a0":s.score>=9?"#3d9bff":s.score>=6?"#f59e0b":"#ff4d6d"],
+  ].map(([l,v,c])=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-val" style="color:${c};font-size:11px">${v}</div></div>`).join("");
+
+  const signals=(s.signals||[]).map(sig=>{
+    const good=sig.includes("✓"),bad=sig.includes("✗");
+    const ic=good?"#00e5a0":bad?"#ff4d6d":"#f59e0b";
+    const icon=good?"✓":bad?"✗":"–";
+    return `<div class="signal-row"><span class="sig-icon" style="color:${ic}">${icon}</span><span class="sig-text">${sig.replace(" ✓","").replace(" ✗","")}</span></div>`;
+  }).join("");
+
+  return `
+  <div class="card ${isOpen?"open":""}" id="card-${s.symbol}" style="border-left:3px solid ${cc}">
+    <div class="card-header" onclick="toggleCard('${s.symbol}')">
+      <div>
+        <div class="rank" style="color:${rankColors[rank-1]||"#6888a8"}">${rank}</div>
+        <div class="grade" style="color:${gi.color};background:${gi.bg};border:2px solid ${gi.color}">${gi.grade}</div>
+      </div>
+      <div>
+        <span class="sym">${s.symbol}</span>
+        <div class="badges">${badges}</div>
+        <div class="rsi-bar">
+          <div class="rsi-track"><div class="rsi-fill" style="width:${Math.min(100,s.rsi||50)}%;background:${rsiColor}"></div></div>
+          <span class="rsi-val" style="color:${rsiColor}">${s.rsi||"—"}</span>
+        </div>
+      </div>
+      <div class="price-col">
+        <div class="cmp">${fmtPr(s.cmp)}</div>
+        <div class="chg" style="color:${cc}">${fmtPct(s.change_pct)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;margin-top:3px;color:${dirColor}">
+          → ${fmtPr(s.target_price)} <span style="opacity:0.7">(${s.target_pct>=0?"+":""}${s.target_pct}%)</span>
+        </div>
+        <div class="hl">H:${fmtPr(s.high)} L:${fmtPr(s.low)}</div>
+        <div class="chevron">${isOpen?"▲ hide":"▼ details"}</div>
+      </div>
+    </div>
+    ${isOpen?`
+    <div class="card-body">
+      <div style="background:${dirColor}10;border:1px solid ${dirColor}35;border-radius:9px;padding:14px 16px;margin-bottom:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:${dirColor};margin-bottom:8px;font-weight:700;">
+          ${dirIcon} ${s.direction||"NEUTRAL"} — 2–3 Day Projection (ATR-based)
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-bottom:3px;">ENTRY (CMP)</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:#ddeeff;">${fmtPr(s.cmp)}</div>
+          </div>
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-bottom:3px;">TARGET</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:${dirColor};">${fmtPr(s.target_price)}</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:${dirColor};">${s.target_pct>=0?"+":""}${s.target_pct}%</div>
+          </div>
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-bottom:3px;">STOP-LOSS</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:#ff4d6d;">${fmtPr(s.stop_loss)}</div>
+          </div>
+          <div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-bottom:3px;">RISK:REWARD</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:${s.risk_reward>=1.5?'#00e5a0':'#f59e0b'};">1:${s.risk_reward}</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:#6888a8;margin-top:10px;line-height:1.6;">
+          Target based on ATR(14) × ${s.adx>=30?'2.5':s.adx>=20?'1.8':'1.2'} (trend strength multiplier from ADX ${s.adx}). Stop-loss = 1× ATR from entry.
+          This is a statistical projection from volatility, not a guarantee.
+        </div>
+      </div>
+      <div class="section-title">Price & Classic Indicators</div>
+      <div class="metrics">${m1}</div>
+      <div class="section-title">New Indicators — Supertrend · ADX</div>
+      <div class="metric-wide">${m2}</div>
+      <div class="section-title">All Technical Signals</div>
+      <div class="signals-box">${signals}</div>
+      <div class="tv-box">
+        <div class="tv-title">● Verify on TradingView — Real-Time</div>
+        <div class="tv-links">
+          <a class="tv-link" href="https://www.tradingview.com/chart/?symbol=NSE:${s.symbol}" target="_blank">📈 Live Chart ↗</a>
+          <a class="tv-link" href="https://www.tradingview.com/symbols/NSE-${s.symbol}/technicals/" target="_blank">📊 Technicals ↗</a>
+        </div>
+      </div>
+    </div>`:""} 
+  </div>`;
+}
+
+function toggleCard(sym){expanded[sym]=!expanded[sym];renderPicks();}
+
+function renderPicks(){
+  const c=document.getElementById("picks");
+  if(!stocks.length){c.innerHTML="";return;}
+  let html=`<div class="picks-header">
+    <span class="picks-title">Top ${stocks.length} Technical Setups</span>
+    <span class="tag" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">LIVE DATA</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878">9 Indicators · Score /15</span>
+  </div>`;
+  stocks.forEach((s,i)=>{html+=renderCard(s,i+1);});
+  c.innerHTML=html;
+}
+
+async function runScan(){
+  const btn=document.getElementById("scanBtn");
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spinner"></span> Fetching…`;
+  document.getElementById("idle").style.display="none";
+  document.getElementById("summary").style.display="none";
+  document.getElementById("logBox").innerHTML="";
+  hideError(); logs=[]; stocks=[]; expanded={};
+  document.getElementById("picks").innerHTML="";
+  document.getElementById("progWrap").style.display="block";
+  setProg(0,"");
+
+  const today=new Date().toLocaleDateString("en-IN",{weekday:"long",month:"long",day:"numeric",year:"numeric",timeZone:"Asia/Kolkata"});
+  addLog(`[START] NSESignal Pro v5 — ${today}`);
+  addLog("[DATA] Fetching cached scan result from backend…");
+  setProg(10,"Connecting…");
+
+  try{
+    const h=await fetch(`${BACKEND}/health`);
+    if(!h.ok) throw new Error("Backend health check failed");
+    const hd=await h.json();
+    addLog(`[✓] Backend connected — last scan: ${hd.last_scan||"first run"}`);
+    addLog(`[INFO] Watchlist: ${hd.watchlist||"—"} stocks · scan runs every 5 min`);
+    setProg(20,"Fetching indices…");
+    await fetchIndices();
+    addLog("[✓] Indices fetched");
+    setProg(30,"Fetching scan results…");
+    addLog("[SCAN] Getting cached results — should be instant…");
+
+    const sr=await fetch(`${BACKEND}/scan`);
+
+    if(sr.status===202){
+      addLog("[SCAN] First scan running on server — polling every 5 seconds…");
+      let sd=null;
+      for(let i=0;i<24;i++){
+        await sleep(5000);
+        setProg(30+i*2,`First scan in progress… (${(i+1)*5}s)`);
+        addLog(`[POLL] Attempt ${i+1}…`);
+        const pr=await fetch(`${BACKEND}/scan`);
+        if(pr.ok&&pr.status!==202){const pd=await pr.json();if(pd.top10?.length){sd=pd;break;}}
+      }
+      if(!sd) throw new Error("First scan taking too long — retry in 60 seconds");
+      var finalData=sd;
+    } else if(!sr.ok){
+      throw new Error(`HTTP ${sr.status}`);
+    } else {
+      var finalData=await sr.json();
+    }
+
+    const sd=finalData;
+    setProg(90,"Rendering results…");
+    addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks scanned in ${sd.elapsed||"—"}`);
+    addLog(`[✓] NIFTY today: ${sd.nifty_change>=0?"+":""}${sd.nifty_change||0}%`);
+    sd.top10.forEach((s,i)=>
+      addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | ADX:${s.adx} | ST:${s.supertrend_bull?"▲":"▼"} | Score:${s.score}/17`)
+    );
+
+    stocks=sd.top10;
+    document.getElementById("sumScanned").textContent=`${sd.scanned}/${sd.total||sd.scanned}`;
+    document.getElementById("sumPicks").textContent=sd.top10.length;
+    const regime=sd.market_regime||{};
+    const rColor=regime.trend==="BULL"?"#00e5a0":regime.trend==="BEAR"?"#ff4d6d":"#f59e0b";
+    document.getElementById("sumNifty").textContent=`${regime.trend||"NEUTRAL"} ${sd.nifty_change>=0?"+":""}${sd.nifty_change||0}%`;
+    document.getElementById("sumNifty").style.color=rColor;
+    document.getElementById("sumTime").textContent=sd.scan_time;
+    document.getElementById("summary").style.display="grid";
+    document.getElementById("scanSub").textContent=`${sd.scanned} stocks · ${sd.scan_time} · score /17 · refreshes every 5 min`;
+
+    renderPicks();
+    setProg(100,"Complete");
+    addLog("[✓] Done — expand any card for target price + all indicators + TradingView link");
+    btn.innerHTML="↺ Refresh Scan";
+
+  }catch(err){
+    showError(err.message);
+    addLog(`[ERR] ${err.message}`);
+    btn.innerHTML="▶ Run Live Technical Scan";
+    setProg(0,"");
+  }
+  btn.disabled=false;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════════════
+function switchTab(tab){
+  document.getElementById("tab-short").classList.toggle("active", tab==="short");
+  document.getElementById("tab-long").classList.toggle("active", tab==="long");
+  document.getElementById("panel-short").style.display = tab==="short" ? "block" : "none";
+  document.getElementById("panel-long").style.display  = tab==="long"  ? "block" : "none";
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LONG-TERM VALUE/GROWTH SCREENER
+// ═══════════════════════════════════════════════════════════════════════
+let ltLogs=[], ltStocks=[], ltExpanded={};
+
+function ltAddLog(msg){
+  ltLogs.push(msg);
+  if(ltLogs.length>80) ltLogs=ltLogs.slice(-80);
+  const box=document.getElementById("ltLogBox");
+  if(box){
+    const c=msg.startsWith("[ERR]")?"#ff4d6d":msg.includes("✓")||msg.startsWith("[✓]")?"#00e5a0":msg.startsWith("[WARN]")?"#f59e0b":"#3d5878";
+    box.innerHTML+=`<div style="color:${c}">${msg}</div>`;
+    box.scrollTop=box.scrollHeight;
+  }
+  document.getElementById("ltLogWrap").style.display="block";
+}
+
+function ltSetProg(pct,lbl){
+  document.getElementById("ltProgFill").style.width=pct+"%";
+  document.getElementById("ltProgPct").textContent=pct+"%";
+  if(lbl!==undefined) document.getElementById("ltProgLbl").textContent=lbl;
+}
+
+function ltShowError(msg){const b=document.getElementById("ltErrorBox");b.innerHTML=`<b>Error:</b> ${msg}`;b.style.display="block";}
+function ltHideError(){document.getElementById("ltErrorBox").style.display="none";}
+
+function ltGradeColor(grade){
+  return {A:"#00e5a0","A+":"#00e5a0",B:"#f59e0b",C:"#6888a8",D:"#ff4d6d"}[grade]||"#6888a8";
+}
+
+const fmtCr = n => n==null ? "—" : Math.abs(n)>=1e7 ? "₹"+(n/1e7).toFixed(0)+"Cr" : "₹"+Number(n).toLocaleString("en-IN");
+const fmtNum= (n,suf="") => n==null ? "—" : n+suf;
+
+function renderLtCard(f, rank){
+  const isOpen = ltExpanded[f.symbol] || false;
+  const gc = ltGradeColor(f.grade);
+  const rankColors=["#00e5a0","#8b5cf6","#3d9bff","#f59e0b","#5a7090","#6888a8","#06b6d4","#3d9bff","#f59e0b","#8b5cf6","#5a7090","#6888a8","#00e5a0","#f59e0b","#3d9bff"];
+
+  const valueTags = [
+    f.pe!=null && f.pe<=15 ? `<span class="tag" style="background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.25);color:#00e5a0">P/E ${f.pe} CHEAP</span>` : f.pe!=null ? `<span class="tag" style="background:rgba(104,136,168,0.1);border:1px solid rgba(104,136,168,0.2);color:#6888a8">P/E ${f.pe}</span>` : "",
+    f.peg!=null && f.peg<=1.5 ? `<span class="tag" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#8b5cf6">PEG ${f.peg}</span>` : "",
+    f.roe!=null && f.roe>=15 ? `<span class="tag" style="background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff">ROE ${f.roe}%</span>` : "",
+    f.debt_equity!=null && f.debt_equity<=0.5 ? `<span class="tag" style="background:rgba(0,229,160,0.08);border:1px solid rgba(0,229,160,0.2);color:#00e5a0">LOW DEBT</span>` : "",
+    f.earnings_growth!=null && f.earnings_growth>=15 ? `<span class="tag" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:#f59e0b">GROWTH +${f.earnings_growth}%</span>` : "",
+    f.fcf_positive ? `<span class="tag" style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);color:#06b6d4">FCF+</span>` : "",
+  ].join("");
+
+  const m1=[
+    ["P/E Ratio",fmtNum(f.pe),f.pe!=null&&f.pe<=15?"#00e5a0":"#ddeeff"],
+    ["PEG Ratio",fmtNum(f.peg),f.peg!=null&&f.peg<=1.5?"#8b5cf6":"#ddeeff"],
+    ["P/B Ratio",fmtNum(f.pb),"#ddeeff"],
+    ["ROE",fmtNum(f.roe,"%"),f.roe!=null&&f.roe>=15?"#00e5a0":"#ddeeff"],
+    ["ROA",fmtNum(f.roa,"%"),"#ddeeff"],
+    ["Debt/Equity",fmtNum(f.debt_equity),f.debt_equity!=null&&f.debt_equity<=0.5?"#00e5a0":f.debt_equity>1.5?"#ff4d6d":"#ddeeff"],
+    ["Profit Margin",fmtNum(f.profit_margin,"%"),"#ddeeff"],
+    ["Current Ratio",fmtNum(f.current_ratio),"#ddeeff"],
+  ].map(([l,v,c])=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-val" style="color:${c}">${v}</div></div>`).join("");
+
+  const m2=[
+    ["Earnings Growth",fmtNum(f.earnings_growth,"%"),f.earnings_growth!=null&&f.earnings_growth>=15?"#00e5a0":f.earnings_growth<0?"#ff4d6d":"#ddeeff"],
+    ["Revenue Growth",fmtNum(f.revenue_growth,"%"),f.revenue_growth!=null&&f.revenue_growth>=15?"#00e5a0":"#ddeeff"],
+    ["Free Cash Flow",f.fcf_positive?"Positive ✓":"Negative ✗",f.fcf_positive?"#00e5a0":"#ff4d6d"],
+    ["52W High",fmtPr(f.week52_high),"#6888a8"],
+    ["52W Low",fmtPr(f.week52_low),"#6888a8"],
+    ["% From 52W High",fmtNum(f.pct_from_52h,"%"),"#f59e0b"],
+    ["Analyst Target",fmtPr(f.analyst_target),"#3d9bff"],
+    ["Analyst Upside",f.analyst_upside!=null?(f.analyst_upside>=0?"+":"")+f.analyst_upside+"%":"—",f.analyst_upside>=20?"#00e5a0":"#ddeeff"],
+  ].map(([l,v,c])=>`<div class="metric"><div class="metric-label">${l}</div><div class="metric-val" style="color:${c};font-size:11px">${v}</div></div>`).join("");
+
+  const signals = (f.signals||[]).map(sig=>{
+    const good=sig.includes("✓"), bad=sig.includes("✗");
+    const ic = good?"#00e5a0":bad?"#ff4d6d":"#f59e0b";
+    const icon = good?"✓":bad?"✗":"–";
+    return `<div class="signal-row"><span class="sig-icon" style="color:${ic}">${icon}</span><span class="sig-text">${sig.replace(" ✓","").replace(" ✗","")}</span></div>`;
+  }).join("");
+
+  return `
+  <div class="card ${isOpen?"open":""}" style="border-left:3px solid ${gc};${isOpen?`box-shadow:0 0 24px ${gc}10;`:""}">
+    <div class="card-header" onclick="toggleLtCard('${f.symbol}')" style="grid-template-columns:50px 1fr 110px;">
+      <div>
+        <div class="rank" style="color:${rankColors[rank-1]||"#6888a8"}">${rank}</div>
+        <div class="grade" style="color:${gc};background:${gc}20;border:2px solid ${gc}">${f.grade}</div>
+      </div>
+      <div>
+        <span class="sym">${f.symbol}</span>
+        <div style="font-size:10px;color:#6888a8;margin-top:2px;">${f.company||""} ${f.sector?"· "+f.sector:""}</div>
+        <div class="badges">${valueTags}</div>
+      </div>
+      <div class="price-col">
+        <div class="cmp">${fmtPr(f.cmp)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#8b5cf6;font-weight:700;margin-top:3px;">
+          Score ${f.score}/15
+        </div>
+        <div class="chevron">${isOpen?"▲ hide":"▼ details"}</div>
+      </div>
+    </div>
+    ${isOpen?`
+    <div class="card-body">
+      <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:9px;padding:12px 16px;margin-bottom:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#8b5cf6;margin-bottom:6px;font-weight:700;">Why This Could Be a Long-Term Value Pick</div>
+        <div style="font-size:11px;color:#6888a8;line-height:1.7;">
+          ${f.market_cap?`Market Cap: ${fmtCr(f.market_cap)} · `:""}${f.industry||""}
+          ${f.num_analysts>=3?` · Covered by ${f.num_analysts} analysts (${f.recommendation||"—"})`:""}
+        </div>
+      </div>
+      <div class="section-title">Valuation & Quality</div>
+      <div class="metrics">${m1}</div>
+      <div class="section-title">Growth & Future Outlook</div>
+      <div class="metric-wide" style="grid-template-columns:repeat(4,1fr);">${m2}</div>
+      <div class="section-title">All Fundamental Signals</div>
+      <div class="signals-box">${signals}</div>
+      <div class="tv-box">
+        <div class="tv-title">● Research Further</div>
+        <div class="tv-links">
+          <a class="tv-link" href="https://www.tradingview.com/symbols/NSE-${f.symbol}/" target="_blank">📊 TradingView ↗</a>
+          <a class="tv-link" href="https://www.screener.in/company/${f.symbol}/" target="_blank">📋 Screener.in ↗</a>
+          <a class="tv-link" href="https://www.tradingview.com/chart/?symbol=NSE:${f.symbol}" target="_blank">📈 Chart ↗</a>
+        </div>
+      </div>
+    </div>`:""}
+  </div>`;
+}
+
+function toggleLtCard(sym){ltExpanded[sym]=!ltExpanded[sym];renderLtPicks();}
+
+function renderLtPicks(){
+  const c=document.getElementById("ltPicks");
+  if(!ltStocks.length){c.innerHTML="";return;}
+  let html=`<div class="picks-header">
+    <span class="picks-title">Top ${ltStocks.length} Long-Term Value Picks</span>
+    <span class="tag" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.25);color:#8b5cf6">FUNDAMENTAL</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878">Score /15 · Updated every 6 hrs</span>
+  </div>`;
+  ltStocks.forEach((f,i)=>{html+=renderLtCard(f,i+1);});
+  c.innerHTML=html;
+}
+
+async function runLtScan(){
+  const btn=document.getElementById("ltScanBtn");
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spinner"></span> Analysing fundamentals…`;
+  document.getElementById("ltIdle").style.display="none";
+  document.getElementById("ltSummary").style.display="none";
+  document.getElementById("ltLogBox").innerHTML="";
+  ltHideError(); ltLogs=[]; ltStocks=[]; ltExpanded={};
+  document.getElementById("ltPicks").innerHTML="";
+  document.getElementById("ltProgWrap").style.display="block";
+  ltSetProg(0,"");
+
+  const today=new Date().toLocaleDateString("en-IN",{weekday:"long",month:"long",day:"numeric",year:"numeric",timeZone:"Asia/Kolkata"});
+  ltAddLog(`[START] Long-Term Value Screener — ${today}`);
+  ltAddLog("[DATA] Fetching fundamental data: P/E, ROE, growth, debt, cash flow…");
+  ltSetProg(10,"Connecting…");
+
+  try{
+    const h=await fetch(`${BACKEND}/health`);
+    if(!h.ok) throw new Error("Backend health check failed");
+    const hd=await h.json();
+    ltAddLog(`[✓] Backend connected — last fundamental scan: ${hd.lt_last_scan||"first run"}`);
+    ltSetProg(25,"Fetching cached fundamental analysis…");
+    ltAddLog("[SCAN] Fundamentals update every 6 hours — should return instantly if cached…");
+
+    const sr=await fetch(`${BACKEND}/lt-scan`);
+
+    if(sr.status===202){
+      ltAddLog("[SCAN] First fundamental scan running on server — this is slower (more data per stock)…");
+      ltAddLog("[SCAN] Polling every 8 seconds — may take 2-3 minutes for full NIFTY 500 fundamentals…");
+      let sd=null;
+      for(let i=0;i<20;i++){
+        await sleep(8000);
+        ltSetProg(25+i*3,`First scan in progress… (${(i+1)*8}s)`);
+        ltAddLog(`[POLL] Attempt ${i+1}/20…`);
+        const pr=await fetch(`${BACKEND}/lt-scan`);
+        if(pr.ok&&pr.status!==202){const pd=await pr.json();if(pd.top15?.length){sd=pd;break;}}
+      }
+      if(!sd) throw new Error("First scan taking longer than expected — retry in 1 minute");
+      var finalData=sd;
+    } else if(!sr.ok){
+      throw new Error(`HTTP ${sr.status}`);
+    } else {
+      var finalData=await sr.json();
+    }
+
+    const sd=finalData;
+    ltSetProg(90,"Rendering results…");
+    ltAddLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks analysed in ${sd.elapsed||"—"}`);
+    sd.top15.forEach((f,i)=>
+      ltAddLog(`[#${i+1}] ${f.symbol}: P/E:${f.pe||"—"} ROE:${f.roe||"—"}% Growth:${f.earnings_growth||"—"}% Score:${f.score}/15 (${f.grade})`)
+    );
+
+    ltStocks=sd.top15;
+    const validPegs = sd.top15.filter(f=>f.peg!=null).map(f=>f.peg);
+    const avgPeg = validPegs.length ? (validPegs.reduce((a,b)=>a+b,0)/validPegs.length).toFixed(2) : "—";
+
+    document.getElementById("ltSumScanned").textContent=`${sd.scanned}/${sd.total||sd.scanned}`;
+    document.getElementById("ltSumPicks").textContent=sd.top15.length;
+    document.getElementById("ltSumPeg").textContent=avgPeg;
+    document.getElementById("ltSumTime").textContent=sd.scan_time;
+    document.getElementById("ltSummary").style.display="grid";
+    document.getElementById("ltScanSub").textContent=`${sd.scanned} stocks analysed · ${sd.scan_time} · score /17 · refreshes every 6 hrs`;
+
+    renderLtPicks();
+    ltSetProg(100,"Complete");
+    ltAddLog("[✓] Done — expand any card for full fundamental breakdown");
+    btn.innerHTML="↺ Refresh Value Scan";
+
+  }catch(err){
+    ltShowError(err.message);
+    ltAddLog(`[ERR] ${err.message}`);
+    btn.innerHTML="🌱 Run Long-Term Value Scan";
+    ltSetProg(0,"");
+  }
+  btn.disabled=false;
+}
+
+
+// ═══════════════════════════════════════════════════════
+// TAB SWITCH — add analyse tab
+// ═══════════════════════════════════════════════════════
+const origSwitch = switchTab;
+function switchTab(tab){
+  ["short","long","analyse"].forEach(t=>{
+    document.getElementById("tab-"+t)?.classList.toggle("active", t===tab);
+    const p = document.getElementById("panel-"+t);
+    if(p) p.style.display = t===tab?"block":"none";
+  });
+  // Update hero text per tab
+  const heroMap = {
+    short:   ["RSI · MACD · Supertrend · ADX · StochRSI · 52W Breakout", "NSE Stocks With <span class='grad'>Best Technical Setup</span>"],
+    long:    ["P/E · PEG · ROE · Growth · Debt · FCF · Promoter Holding",  "NSE Stocks With <span class='grad'>Long-Term Value Potential</span>"],
+    analyse: ["Technical + Fundamental + Market Regime + Promoter",          "Analyse <span class='grad'>Any NSE Stock</span>"],
+  };
+  if(heroMap[tab]){
+    const el = document.getElementById("heroSub");
+    const h1 = document.getElementById("heroTitle");
+    const p  = document.getElementById("heroDesc");
+    if(el) el.textContent = heroMap[tab][0];
+    if(h1) h1.innerHTML  = heroMap[tab][1];
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MY STOCK ANALYSIS
+// ═══════════════════════════════════════════════════════
+function setAProg(pct, lbl){
+  const f = document.getElementById("aProgFill");
+  const p = document.getElementById("aProgPct");
+  const l = document.getElementById("aProgLbl");
+  if(f) f.style.width = pct+"%";
+  if(p) p.textContent = pct+"%";
+  if(l && lbl!==undefined) l.textContent = lbl;
+}
+
+function metricBox(label, value, color){
+  return `<div class="metric"><div class="metric-label">${label}</div><div class="metric-val" style="color:${color||"#ddeeff"};font-size:12px">${value}</div></div>`;
+}
+
+function signalHtml(sig){
+  const good=sig.includes("✓"), bad=sig.includes("✗");
+  const c=good?"#00e5a0":bad?"#ff4d6d":"#f59e0b";
+  const icon=good?"✓":bad?"✗":"–";
+  return `<div class="signal-row"><span class="sig-icon" style="color:${c}">${icon}</span><span class="sig-text" style="font-size:10px">${sig.replace(" ✓","").replace(" ✗","")}</span></div>`;
+}
+
+function reasonHtml(sig, type){
+  const c = type==="bull"?"#00e5a0":"#ff4d6d";
+  return `<div style="font-size:11px;color:#6888a8;padding:5px 0;border-bottom:1px solid #112038;line-height:1.5;">${sig.replace(" ✓","").replace(" ✗","")}</div>`;
+}
+
+// Populate quick-pick buttons from last scan
+function populateQuickPicks(){
+  const row = document.getElementById("qPicksRow");
+  if(!row) return;
+  // Use stocks from short-term scan if available
+  const syms = stocks.slice(0,5).map(s=>s.symbol);
+  if(!syms.length) return;
+  row.innerHTML = syms.map(s=>
+    `<span onclick="document.getElementById('stockInput').value='${s}';analyseStock()"
+      style="cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:9px;
+      background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);
+      color:#3d9bff;padding:2px 8px;border-radius:4px;">${s}</span>`
+  ).join("");
+}
+
+async function analyseStock(){
+  const sym = (document.getElementById("stockInput")?.value||"").trim().toUpperCase();
+  if(!sym){ alert("Please enter an NSE symbol"); return; }
+
+  const btn = document.getElementById("analyseBtn");
+  btn.disabled=true; btn.innerHTML="⏳ Analysing…";
+  document.getElementById("aIdle").style.display="none";
+  document.getElementById("aResult").style.display="none";
+  document.getElementById("aProgWrap").style.display="block";
+  document.getElementById("aErrorBox").style.display="none";
+  setAProg(0,"");
+
+  try {
+    setAProg(15, `Fetching live data for ${sym}…`);
+    const r = await fetch(`${BACKEND}/analyse/${sym}`);
+    setAProg(60, "Computing indicators…");
+
+    if(r.status===404){
+      const d=await r.json();
+      throw new Error(d.message||`${sym} not found. Check the NSE symbol.`);
+    }
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+
+    const d = await r.json();
+    setAProg(90, "Building analysis…");
+
+    if(d.status==="error") throw new Error(d.message);
+
+    // ── Verdict banner ──
+    const vc = d.verdict_color||"#f59e0b";
+    document.getElementById("aVerdict").style.cssText =
+      `border-radius:12px;padding:20px 22px;margin-bottom:14px;text-align:center;background:${vc}10;border:2px solid ${vc}40;`;
+    document.getElementById("aVerdictIcon").textContent =
+      d.verdict==="BUY"?"▲":d.verdict==="SELL / AVOID"?"▼":"●";
+    document.getElementById("aVerdictIcon").style.color = vc;
+    document.getElementById("aVerdictLabel").textContent = d.verdict;
+    document.getElementById("aVerdictLabel").style.color = vc;
+    document.getElementById("aSymbolLine").innerHTML =
+      `<span style="color:#ddeeff">${d.symbol}</span> · <span style="color:#6888a8">${d.company||""}</span> · <span style="color:#6888a8">${d.sector||""}</span>` +
+      ` · NIFTY <span style="color:${d.regime==="BULL"?"#00e5a0":d.regime==="BEAR"?"#ff4d6d":"#f59e0b"}">${d.regime}</span>`;
+    document.getElementById("aVerdictSummary").textContent = d.verdict_summary;
+
+    // ── Score gauges ──
+    const tColor = d.tech_score>=10?"#00e5a0":d.tech_score>=7?"#3d9bff":d.tech_score>=5?"#f59e0b":"#ff4d6d";
+    const fColor = d.fund_score>=10?"#00e5a0":d.fund_score>=7?"#3d9bff":d.fund_score>=5?"#f59e0b":"#ff4d6d";
+    const cColor = d.verdict==="BUY"?"#00e5a0":d.verdict==="SELL / AVOID"?"#ff4d6d":"#f59e0b";
+    document.getElementById("aTechGauge").innerHTML =
+      `<div class="sum-label">Technical Score</div><div class="sum-val" style="color:${tColor}">${d.tech_score}/17</div>`;
+    document.getElementById("aFundGauge").innerHTML =
+      `<div class="sum-label">Fundamental Score</div><div class="sum-val" style="color:${fColor}">${d.fund_score}/17</div>`;
+    document.getElementById("aCombGauge").innerHTML =
+      `<div class="sum-label">Combined Score</div><div class="sum-val" style="color:${cColor};font-size:22px">${d.combined_score}/17</div>`;
+
+    // ── Price grid ──
+    const dirC = d.direction==="BULLISH"?"#00e5a0":d.direction==="BEARISH"?"#ff4d6d":"#f59e0b";
+    document.getElementById("aPriceGrid").innerHTML = [
+      ["CMP (Live)",    fmtPr(d.cmp),                                       "#ddeeff"],
+      ["Target",        fmtPr(d.target_price)+" ("+(d.target_pct>=0?"+":"")+d.target_pct+"%)", dirC],
+      ["Stop-Loss",     fmtPr(d.stop_loss),                                 "#ff4d6d"],
+      ["Risk:Reward",   d.risk_reward?"1:"+d.risk_reward:"—",               d.risk_reward>=1.5?"#00e5a0":"#f59e0b"],
+    ].map(([l,v,c])=>metricBox(l,v,c)).join("");
+
+    // ── Technical indicators grid ──
+    document.getElementById("aTechGrid").innerHTML = [
+      ["RSI-14",        d.rsi||"—",                                d.rsi>=45&&d.rsi<=72?"#00e5a0":"#ff4d6d"],
+      ["StochRSI K",    d.stoch_rsi_k||"—",                       d.stoch_rsi_k<80&&d.stoch_rsi_k>d.stoch_rsi_d?"#8b5cf6":"#6888a8"],
+      ["MACD Hist",     d.macd_hist?.toFixed(3)||"—",             d.macd_hist>=0?"#00e5a0":"#ff4d6d"],
+      ["Supertrend",    d.supertrend_bull?"BULL":"BEAR",           d.supertrend_bull?"#8b5cf6":"#ff4d6d"],
+      ["ADX",           d.adx||"—",                               d.adx>=25?"#f59e0b":"#6888a8"],
+      ["VWAP",          d.above_vwap?"ABOVE":"BELOW",             d.above_vwap?"#00e5a0":"#ff4d6d"],
+      ["EMA Cross",     d.golden_cross?"GOLDEN":"DEATH",          d.golden_cross?"#00e5a0":"#ff4d6d"],
+      ["Volume",        d.rel_volume+"x avg",                     d.rel_volume>=1.5?"#00e5a0":"#6888a8"],
+    ].map(([l,v,c])=>metricBox(l,v,c)).join("");
+
+    // ── Fundamental grid ──
+    document.getElementById("aFundGrid").innerHTML = [
+      ["P/E Ratio",     d.pe||"—",                                d.pe&&d.pe<=20?"#00e5a0":"#6888a8"],
+      ["PEG Ratio",     d.peg||"—",                               d.peg&&d.peg<=1.5?"#00e5a0":"#6888a8"],
+      ["ROE %",         d.roe?d.roe+"%":"—",                      d.roe&&d.roe>=15?"#00e5a0":"#6888a8"],
+      ["Debt/Equity",   d.debt_equity||"—",                       d.debt_equity&&d.debt_equity<=0.5?"#00e5a0":d.debt_equity>1.5?"#ff4d6d":"#6888a8"],
+      ["EPS Growth",    d.earnings_growth?d.earnings_growth+"%":"—", d.earnings_growth&&d.earnings_growth>=15?"#00e5a0":"#6888a8"],
+      ["Rev Growth",    d.revenue_growth?d.revenue_growth+"%":"—",  d.revenue_growth&&d.revenue_growth>=10?"#00e5a0":"#6888a8"],
+      ["Promoter",      d.promoter_holding?d.promoter_holding+"%":"—", d.promoter_holding&&d.promoter_holding>=50?"#00e5a0":"#6888a8"],
+      ["Analyst ↑",     d.analyst_upside!=null?"+"+d.analyst_upside+"%":"—", d.analyst_upside&&d.analyst_upside>=15?"#00e5a0":"#6888a8"],
+    ].map(([l,v,c])=>metricBox(l,v,c)).join("");
+
+    // ── Signals ──
+    document.getElementById("aTechSignals").innerHTML = (d.tech_signals||[]).map(s=>signalHtml(s)).join("");
+    document.getElementById("aFundSignals").innerHTML = (d.fund_signals||[]).map(s=>signalHtml(s)).join("");
+
+    // ── Reasons ──
+    document.getElementById("aBullReasons").innerHTML = (d.bullish_reasons||[]).length
+      ? d.bullish_reasons.map(s=>reasonHtml(s,"bull")).join("")
+      : `<div style="font-size:11px;color:#3d5878;">No strong bullish signals found</div>`;
+    document.getElementById("aBearReasons").innerHTML = (d.bearish_reasons||[]).length
+      ? d.bearish_reasons.map(s=>reasonHtml(s,"bear")).join("")
+      : `<div style="font-size:11px;color:#3d5878;">No major bearish signals found</div>`;
+
+    // ── TradingView links ──
+    document.getElementById("aTVLinks").innerHTML = [
+      [`📈 Live Chart`, `https://www.tradingview.com/chart/?symbol=NSE:${d.symbol}`],
+      [`📊 Technicals`, `https://www.tradingview.com/symbols/NSE-${d.symbol}/technicals/`],
+      [`📋 Screener.in`, `https://www.screener.in/company/${d.symbol}/`],
+    ].map(([l,u])=>`<a class="tv-link" href="${u}" target="_blank">${l} ↗</a>`).join("");
+
+    setAProg(100,"Complete");
+    document.getElementById("aResult").style.display="block";
+
+  } catch(err){
+    const eb = document.getElementById("aErrorBox");
+    eb.innerHTML = `<b>Error:</b> ${err.message}`;
+    eb.style.display="block";
+    setAProg(0,"");
+  }
+
+  document.getElementById("aProgWrap").style.display="none";
+  btn.disabled=false;
+  btn.innerHTML="🔍 Analyse";
+}
+
+fetchIndices();
+setTimeout(populateQuickPicks, 2000);
+
+// ═══════════════════════════════════════════════════════
+// SECTOR PULSE
+// ═══════════════════════════════════════════════════════
+
+function setSProg(pct, lbl){
+  const f=document.getElementById("sProgFill");
+  const p=document.getElementById("sProgPct");
+  const l=document.getElementById("sProgLbl");
+  if(f) f.style.width=pct+"%";
+  if(p) p.textContent=pct+"%";
+  if(l&&lbl!==undefined) l.textContent=lbl;
+}
+
+function renderSectorCard(s, rank){
+  const bc = s.boom_color || "#6888a8";
+  const trendIcon = {
+    "BOOMING":"🔥","RISING":"📈","NEUTRAL":"➡️","FALLING":"📉","AVOID":"⛔"
+  }[s.trend] || "📊";
+
+  const scoreBar = (val, max, color) => {
+    const pct = Math.min(100, (val/max)*100);
+    return `<div style="display:flex;align-items:center;gap:6px;">
+      <div style="flex:1;height:4px;background:#112038;border-radius:2px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${color};border-radius:2px;"></div>
+      </div>
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:${color};min-width:24px;">${val}</span>
+    </div>`;
+  };
+
+  const stockTags = (s.tech_stocks&&s.tech_stocks.length ? s.tech_stocks : s.top_stocks.slice(0,3))
+    .map(sym =>
+      `<span onclick="document.getElementById('stockInput').value='${sym}';switchTab('analyse');analyseStock()"
+        style="cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:9px;
+        background:${bc}15;border:1px solid ${bc}35;color:${bc};
+        padding:3px 9px;border-radius:4px;">${sym}</span>`
+    ).join("");
+
+  const allStockTags = s.top_stocks.slice(0,5)
+    .map(sym =>
+      `<span onclick="document.getElementById('stockInput').value='${sym}';switchTab('analyse');analyseStock()"
+        style="cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:9px;
+        background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff;
+        padding:3px 9px;border-radius:4px;">${sym}</span>`
+    ).join("");
+
+  return `
+  <div style="background:#080f1c;border:1px solid #112038;border-left:3px solid ${bc};
+    border-radius:11px;margin-bottom:10px;overflow:hidden;">
+
+    <!-- Header -->
+    <div style="display:grid;grid-template-columns:36px 1fr auto;align-items:center;
+      gap:12px;padding:13px 16px;cursor:pointer;"
+      onclick="this.parentElement.querySelector('.scard-body').style.display=
+        this.parentElement.querySelector('.scard-body').style.display==='none'?'block':'none'">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;
+        color:${bc};text-align:center;">${rank}</div>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:800;">${s.sector}</span>
+          <span style="font-size:9px;background:${bc}18;border:1px solid ${bc}40;color:${bc};
+            padding:2px 9px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-weight:700;">
+            ${s.boom_label}</span>
+          <span style="font-size:11px;">${trendIcon} ${s.trend}</span>
+        </div>
+        <div style="margin-top:5px;display:flex;gap:5px;flex-wrap:wrap;">${stockTags}</div>
+      </div>
+      <div style="text-align:right;min-width:70px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:800;color:${bc};">${s.combined_score}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;">/10 score</div>
+      </div>
+    </div>
+
+    <!-- Expanded body -->
+    <div class="scard-body" style="display:none;border-top:1px solid #112038;padding:14px 16px 16px;">
+
+      <!-- Score breakdown -->
+      <div style="background:#0c1526;border-radius:8px;padding:12px 14px;margin-bottom:12px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;
+          text-transform:uppercase;color:#3d5878;margin-bottom:8px;">Score Breakdown</div>
+        <div style="display:grid;gap:7px;">
+          <div>
+            <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+              font-size:9px;color:#f59e0b;margin-bottom:3px;">
+              <span>📰 News Sentiment</span><span>${s.news_score}/10</span>
+            </div>
+            ${scoreBar(s.news_pts, 4, "#f59e0b")}
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+              font-size:9px;color:#3d9bff;margin-bottom:3px;">
+              <span>📅 Seasonality</span><span>${s.seasonal_score}/3</span>
+            </div>
+            ${scoreBar(s.seasonal_pts, 3, "#3d9bff")}
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+              font-size:9px;color:#00e5a0;margin-bottom:3px;">
+              <span>📊 Technical Momentum</span><span>${s.tech_pts}/3</span>
+            </div>
+            ${scoreBar(s.tech_pts, 3, "#00e5a0")}
+          </div>
+        </div>
+      </div>
+
+      <!-- Catalyst + Risk -->
+      ${s.catalyst ? `<div style="background:#0c1526;border-left:2px solid ${bc};padding:10px 13px;
+        border-radius:0 7px 7px 0;margin-bottom:10px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;
+          text-transform:uppercase;color:${bc};margin-bottom:4px;">Main Catalyst</div>
+        <div style="font-size:12px;color:#ddeeff;line-height:1.6;">${s.catalyst}</div>
+      </div>` : ""}
+
+      ${s.why ? `<div style="font-size:12px;color:#6888a8;line-height:1.75;margin-bottom:10px;">${s.why}</div>` : ""}
+
+      ${s.seasonal_reason ? `<div style="background:rgba(61,155,255,0.06);border:1px solid rgba(61,155,255,0.2);
+        border-radius:7px;padding:9px 13px;margin-bottom:10px;font-size:11px;color:#3d9bff;line-height:1.6;">
+        📅 <b>Seasonal factor:</b> ${s.seasonal_reason}
+      </div>` : ""}
+
+      ${s.risk ? `<div style="display:flex;gap:8px;align-items:flex-start;
+        background:rgba(255,77,109,0.04);border:1px solid rgba(255,77,109,0.18);
+        border-radius:7px;padding:9px 13px;margin-bottom:12px;">
+        <span style="color:#ff4d6d;font-weight:700;font-size:12px;">⚠ Risk:</span>
+        <span style="font-size:11px;color:#b06070;line-height:1.6;">${s.risk}</span>
+      </div>` : ""}
+
+      <!-- All sector stocks -->
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;
+          text-transform:uppercase;color:#3d5878;margin-bottom:7px;">
+          Top Stocks — Click to Analyse
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">${allStockTags}</div>
+        <div style="font-size:10px;color:#3d5878;margin-top:6px;">
+          Click any stock → opens in My Stock tab with full BUY/HOLD/SELL analysis
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function runSectorPulse(){
+  const btn = document.getElementById("sectorBtn");
+  btn.disabled=true;
+  btn.innerHTML=`<span class="spinner" style="border:2px solid rgba(0,0,0,0.25);border-top-color:#000;"></span> Scanning sectors…`;
+  document.getElementById("sIdle").style.display="none";
+  document.getElementById("sSectors").innerHTML="";
+  document.getElementById("sThemes").style.display="none";
+  document.getElementById("sErrorBox").style.display="none";
+  document.getElementById("sProgWrap").style.display="block";
+  setSProg(0,"");
+
+  try {
+    setSProg(10,"Connecting to backend…");
+    const h = await fetch(`${BACKEND}/health`);
+    if(!h.ok) throw new Error("Backend not responding");
+
+    setSProg(25,"Claude analysing global + India sector sentiment…");
+    document.getElementById("sProgLbl").textContent="Claude analysing global news + India themes + 15 sectors (15-20 sec)…";
+
+    const r = await fetch(`${BACKEND}/sector-pulse`);
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if(d.status==="error") throw new Error(d.message);
+
+    setSProg(90,"Rendering sector rankings…");
+
+    // Themes
+    document.getElementById("sGlobalTheme").textContent = d.global_theme || "";
+    document.getElementById("sIndiaTheme").textContent  = d.india_theme  || "";
+    document.getElementById("sThemes").style.display = "block";
+
+    // Sector cards
+    const sectors = d.sectors || [];
+    document.getElementById("sSectors").innerHTML =
+      `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #112038;">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:2.5px;text-transform:uppercase;color:#3d5878;">
+          ${sectors.length} Sectors Ranked · ${d.date} · ${d.scan_time}
+        </span>
+        <span style="font-size:8px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);
+          color:#f59e0b;padding:2px 8px;border-radius:10px;font-family:'IBM Plex Mono',monospace;">
+          AI + SEASONAL + TECHNICAL
+        </span>
+      </div>` +
+      sectors.map((s,i) => renderSectorCard(s, i+1)).join("");
+
+    document.getElementById("sectorSub").textContent =
+      `${sectors.length} sectors ranked · ${d.date} · ${d.scan_time} · click any stock to analyse`;
+
+    setSProg(100,"Complete");
+    setTimeout(()=>{ document.getElementById("sProgWrap").style.display="none"; }, 800);
+
+  } catch(err) {
+    const eb = document.getElementById("sErrorBox");
+    eb.innerHTML = `<b>Error:</b> ${err.message}`;
+    eb.style.display = "block";
+    document.getElementById("sProgWrap").style.display="none";
+    setSProg(0,"");
+  }
+
+  btn.disabled=false;
+  btn.innerHTML="🌐 Analyse Sector Pulse";
+}
+
+// Update switchTab to handle sector tab
+const _origSwitchTab = switchTab;
+switchTab = function(tab){
+  ["short","long","analyse","sector","mf"].forEach(t=>{
+    document.getElementById("tab-"+t)?.classList.toggle("active", t===tab);
+    const p=document.getElementById("panel-"+t);
+    if(p) p.style.display=t===tab?"block":"none";
+  });
+  const heroMap={
+    short:  ["RSI · MACD · Supertrend · ADX · StochRSI · 52W Breakout","NSE Stocks With <span class='grad'>Best Technical Setup</span>"],
+    long:   ["P/E · PEG · ROE · Growth · Debt · FCF · Promoter Holding","NSE Stocks With <span class='grad'>Long-Term Value Potential</span>"],
+    analyse:["Technical + Fundamental + Market Regime + Promoter","Analyse <span class='grad'>Any NSE Stock</span>"],
+    sector: ["News Sentiment + Seasonality + Technical Momentum","Which Sectors Are <span style='background:linear-gradient(90deg,#f59e0b,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;'>Booming Right Now?</span>"],
+    mf:     ["Live NAV · 1Y/3Y/5Y Returns · Sharpe Ratio · Risk Grade","Top <span style='background:linear-gradient(90deg,#f59e0b,#00e5a0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;'>Mutual Funds</span> by Risk Category"],
+  };
+  const m=heroMap[tab];
+  if(m){
+    const el=document.getElementById("heroSub");
+    const h1=document.getElementById("heroTitle");
+    if(el) el.textContent=m[0];
+    if(h1) h1.innerHTML=m[1];
+  }
+};
+
+
+// ═══════════════════════════════════════════════════════
+// MUTUAL FUND SCANNER
+// Uses mfapi.in — free, no auth, CORS-friendly
+// ═══════════════════════════════════════════════════════
+
+// Curated fund list with AMFI scheme codes
+// Direct Growth plans only — lower expense ratio
+const MF_FUNDS = {
+  high: [
+    {code:"120843",name:"Quant Small Cap Fund",amc:"Quant MF",type:"Small Cap"},
+    {code:"148598",name:"Nippon India Small Cap Fund",amc:"Nippon MF",type:"Small Cap"},
+    {code:"145397",name:"HDFC Small Cap Fund",amc:"HDFC MF",type:"Small Cap"},
+    {code:"119027",name:"SBI Small Cap Fund",amc:"SBI MF",type:"Small Cap"},
+    {code:"119775",name:"Axis Small Cap Fund",amc:"Axis MF",type:"Small Cap"},
+    {code:"130503",name:"Kotak Emerging Equity Fund",amc:"Kotak MF",type:"Mid Cap"},
+    {code:"120505",name:"Nippon India Growth Fund",amc:"Nippon MF",type:"Mid Cap"},
+    {code:"119841",name:"HDFC Mid-Cap Opportunities Fund",amc:"HDFC MF",type:"Mid Cap"},
+    {code:"120157",name:"Axis Midcap Fund",amc:"Axis MF",type:"Mid Cap"},
+    {code:"118825",name:"SBI Magnum Midcap Fund",amc:"SBI MF",type:"Mid Cap"},
+    {code:"120465",name:"Quant Infrastructure Fund",amc:"Quant MF",type:"Sectoral"},
+    {code:"128031",name:"ICICI Pru Technology Fund",amc:"ICICI MF",type:"Sectoral"},
+    {code:"143956",name:"Mirae Asset Healthcare Fund",amc:"Mirae MF",type:"Sectoral"},
+  ],
+  moderate: [
+    {code:"120716",name:"Parag Parikh Flexi Cap Fund",amc:"PPFAS MF",type:"Flexi Cap"},
+    {code:"120503",name:"Quant Flexi Cap Fund",amc:"Quant MF",type:"Flexi Cap"},
+    {code:"120586",name:"HDFC Flexi Cap Fund",amc:"HDFC MF",type:"Flexi Cap"},
+    {code:"120492",name:"Canara Rob Flexi Cap Fund",amc:"Canara Rob MF",type:"Flexi Cap"},
+    {code:"130503",name:"Mirae Asset Large & Midcap",amc:"Mirae MF",type:"Large & Mid Cap"},
+    {code:"120505",name:"Kotak Equity Opportunities Fund",amc:"Kotak MF",type:"Large & Mid Cap"},
+    {code:"119033",name:"SBI Large & Midcap Fund",amc:"SBI MF",type:"Large & Mid Cap"},
+    {code:"148836",name:"Quant Active Fund",amc:"Quant MF",type:"Multi Cap"},
+    {code:"120847",name:"Nippon India Multi Cap Fund",amc:"Nippon MF",type:"Multi Cap"},
+    {code:"119598",name:"HDFC Multi Cap Fund",amc:"HDFC MF",type:"Multi Cap"},
+  ],
+  low: [
+    {code:"120679",name:"Mirae Asset Large Cap Fund",amc:"Mirae MF",type:"Large Cap"},
+    {code:"120584",name:"HDFC Top 100 Fund",amc:"HDFC MF",type:"Large Cap"},
+    {code:"119270",name:"Axis Bluechip Fund",amc:"Axis MF",type:"Large Cap"},
+    {code:"120716",name:"Canara Rob Bluechip Fund",amc:"Canara Rob MF",type:"Large Cap"},
+    {code:"120847",name:"UTI Nifty 50 Index Fund",amc:"UTI MF",type:"Index"},
+    {code:"148111",name:"HDFC Index Fund Nifty 50",amc:"HDFC MF",type:"Index"},
+    {code:"120692",name:"Nippon India Index Fund Nifty 50",amc:"Nippon MF",type:"Index"},
+    {code:"122639",name:"ICICI Pru Balanced Advantage",amc:"ICICI MF",type:"Balanced Advantage"},
+    {code:"130503",name:"HDFC Balanced Advantage Fund",amc:"HDFC MF",type:"Balanced Advantage"},
+    {code:"119533",name:"Kotak Balanced Advantage Fund",amc:"Kotak MF",type:"Balanced Advantage"},
+  ]
+};
+
+function setMFProg(pct, lbl){
+  const f=document.getElementById("mfProgFill");
+  const p=document.getElementById("mfProgPct");
+  const l=document.getElementById("mfProgLbl");
+  if(f) f.style.width=pct+"%";
+  if(p) p.textContent=pct+"%";
+  if(l&&lbl!==undefined) l.textContent=lbl;
+}
+
+async function fetchMFData(fund){
+  try {
+    // Fetch NAV history from mfapi.in
+    const r = await fetch(`https://api.mfapi.in/mf/${fund.code}`);
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(!d.data || d.data.length < 30) return null;
+
+    const navs = d.data; // [{date:"2025-06-15",nav:"120.45"}, ...]
+    const latestNav  = parseFloat(navs[0].nav);
+    const latestDate = navs[0].date;
+    const schemeName = d.meta?.scheme_name || fund.name;
+    const amcName    = d.meta?.fund_house  || fund.amc;
+
+    // Helper: get NAV closest to N days ago
+    function getNavDaysAgo(days){
+      const target = new Date();
+      target.setDate(target.getDate() - days);
+      // Find closest date
+      for(const n of navs){
+        const nd = new Date(n.date.split("-").reverse().join("-"));
+        if(nd <= target) return parseFloat(n.nav);
+      }
+      return null;
+    }
+
+    const nav1y  = getNavDaysAgo(365);
+    const nav3y  = getNavDaysAgo(1095);
+    const nav5y  = getNavDaysAgo(1825);
+
+    // CAGR formula: (current/past)^(1/years) - 1
+    const cagr1y = nav1y  ? ((latestNav/nav1y)   - 1)*100 : null;
+    const cagr3y = nav3y  ? (Math.pow(latestNav/nav3y, 1/3) - 1)*100 : null;
+    const cagr5y = nav5y  ? (Math.pow(latestNav/nav5y, 1/5) - 1)*100 : null;
+
+    // Rolling 1Y returns over 3 years (for volatility estimate)
+    let rollingReturns = [];
+    for(let i=0; i<navs.length-365; i+=30){
+      const curr = parseFloat(navs[i].nav);
+      const past = parseFloat(navs[i+365]?.nav || navs[navs.length-1].nav);
+      if(past>0) rollingReturns.push((curr/past-1)*100);
+    }
+    const avgReturn = rollingReturns.length ? rollingReturns.reduce((a,b)=>a+b,0)/rollingReturns.length : cagr1y||0;
+    const stdDev    = rollingReturns.length >= 2
+      ? Math.sqrt(rollingReturns.reduce((s,r)=>s+Math.pow(r-avgReturn,2),0)/rollingReturns.length)
+      : 20;
+
+    // Sharpe-like ratio (return/volatility, risk-free ~7%)
+    const sharpe = stdDev > 0 ? ((avgReturn - 7) / stdDev).toFixed(2) : "—";
+
+    // Score for ranking: 60% 3Y return + 20% 5Y return + 20% Sharpe
+    const score = (cagr3y||0)*0.6 + (cagr5y||0)*0.2 + parseFloat(sharpe||0)*5;
+
+    return {
+      code: fund.code,
+      name: schemeName,
+      amc:  amcName,
+      type: fund.type,
+      nav:  latestNav,
+      navDate: latestDate,
+      cagr1y, cagr3y, cagr5y,
+      sharpe, stdDev: round2(stdDev),
+      score,
+      dataPoints: navs.length,
+    };
+  } catch(e){ return null; }
+}
+
+function round2(n){ return n!=null ? Math.round(n*100)/100 : null; }
+function fmtRet(n){ return n==null?"—":(n>=0?"+":"")+n.toFixed(1)+"% p.a."; }
+function retColor(n){ return n==null?"#6888a8":n>=20?"#00e5a0":n>=12?"#3d9bff":n>=0?"#f59e0b":"#ff4d6d"; }
+
+// Track which MF cards are expanded
+const mfExpanded = {};
+
+function mfMetric(label, value, color){
+  return `<div style="background:#0c1526;border-radius:7px;padding:9px 11px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:1.5px;text-transform:uppercase;color:#3d5878;margin-bottom:3px;">${label}</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${color||"#ddeeff"};">${value}</div>
+  </div>`;
+}
+
+function mfSignal(text, good){
+  const c = good===true?"#00e5a0":good===false?"#ff4d6d":"#f59e0b";
+  const icon = good===true?"✓":good===false?"✗":"●";
+  return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #112038;align-items:flex-start;">
+    <span style="color:${c};font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;min-width:10px;">${icon}</span>
+    <span style="font-size:11px;color:#6888a8;line-height:1.5;">${text}</span>
+  </div>`;
+}
+
+function generateMFAnalysis(f, rank, riskColor){
+  const signals = [];
+  const c1 = round2(f.cagr1y), c3 = round2(f.cagr3y), c5 = round2(f.cagr5y);
+  const sh  = parseFloat(f.sharpe||0);
+
+  // 3Y return analysis
+  if(c3>=20)      signals.push(mfSignal(`3Y CAGR ${c3}% — exceptional performance, top decile`, true));
+  else if(c3>=15) signals.push(mfSignal(`3Y CAGR ${c3}% — strong outperformance vs benchmark`, true));
+  else if(c3>=10) signals.push(mfSignal(`3Y CAGR ${c3}% — decent return, close to benchmark`, null));
+  else if(c3!=null) signals.push(mfSignal(`3Y CAGR ${c3}% — below expectations for this category`, false));
+
+  // 5Y return analysis
+  if(c5!=null){
+    if(c5>=18)      signals.push(mfSignal(`5Y CAGR ${c5}% — excellent long-term compounding`, true));
+    else if(c5>=13) signals.push(mfSignal(`5Y CAGR ${c5}% — solid long-term track record`, true));
+    else            signals.push(mfSignal(`5Y CAGR ${c5}% — moderate long-term performance`, null));
+  } else signals.push(mfSignal("5Y data unavailable — fund may be less than 5 years old", null));
+
+  // 1Y vs 3Y consistency
+  if(c1!=null && c3!=null){
+    if(c1>c3+5) signals.push(mfSignal(`Recent momentum strong — 1Y (${c1}%) significantly above 3Y avg`, true));
+    else if(c1<c3-5) signals.push(mfSignal(`Recent slowdown — 1Y (${c1}%) below 3Y avg, watch for trend`, false));
+    else signals.push(mfSignal(`Consistent returns — 1Y (${c1}%) in line with 3Y avg`, true));
+  }
+
+  // Sharpe ratio
+  if(sh>=1.0)      signals.push(mfSignal(`Sharpe ratio ${sh} — excellent risk-adjusted returns`, true));
+  else if(sh>=0.5) signals.push(mfSignal(`Sharpe ratio ${sh} — good risk-adjusted performance`, true));
+  else if(sh>=0)   signals.push(mfSignal(`Sharpe ratio ${sh} — moderate risk-adjusted returns`, null));
+  else             signals.push(mfSignal(`Sharpe ratio ${sh} — returns not justifying volatility taken`, false));
+
+  // Volatility
+  const vol = f.stdDev;
+  if(f.type==="Small Cap"){
+    if(vol<25)      signals.push(mfSignal(`Volatility ${vol}% — relatively controlled for small cap`, true));
+    else if(vol<35) signals.push(mfSignal(`Volatility ${vol}% — typical for small cap category`, null));
+    else            signals.push(mfSignal(`Volatility ${vol}% — high, expect large swings`, false));
+  } else if(f.type==="Index"){
+    signals.push(mfSignal(`Index fund — tracks benchmark passively, low manager risk`, true));
+    signals.push(mfSignal(`No fund manager risk — returns mirror index performance`, true));
+  } else {
+    if(vol<15)      signals.push(mfSignal(`Volatility ${vol}% — very low, well managed risk`, true));
+    else if(vol<22) signals.push(mfSignal(`Volatility ${vol}% — moderate, acceptable`, null));
+    else            signals.push(mfSignal(`Volatility ${vol}% — above average volatility`, false));
+  }
+
+  // Rank-based summary
+  if(rank===1)      signals.push(mfSignal(`Ranked #1 in category — best risk-adjusted score`, true));
+  else if(rank===2) signals.push(mfSignal(`Ranked #2 — strong alternative to the top pick`, true));
+  else              signals.push(mfSignal(`Ranked #3 — solid choice, diversification option`, null));
+
+  // Data quality
+  if(f.dataPoints>1000) signals.push(mfSignal(`${f.dataPoints} NAV records — long track record available`, true));
+  else if(f.dataPoints>500) signals.push(mfSignal(`${f.dataPoints} NAV records — adequate history`, null));
+  else signals.push(mfSignal(`Only ${f.dataPoints} NAV records — limited history, use caution`, false));
+
+  // Why best
+  let whyBest = "";
+  if(rank===1){
+    whyBest = c3>=15
+      ? `Top pick because of its ${c3}% 3-year CAGR combined with a Sharpe ratio of ${sh} — delivering superior returns relative to the risk taken. ${c5?`The 5-year track record of ${c5}% confirms consistency.`:""}`
+      : `Top pick in this category based on the best combined score of 3Y returns (${c3}%), 5Y returns (${c5||"—"}%), and risk-adjusted performance (Sharpe: ${sh}).`;
+  } else if(rank===2){
+    whyBest = `Strong runner-up. ${c3!=null?`3Y returns of ${c3}% `:""}with Sharpe of ${sh}. A good alternative or complement to the #1 pick for diversification.`;
+  } else {
+    whyBest = `Third-ranked but still a solid fund. Useful for diversifying across fund houses. ${c3!=null?`3Y CAGR: ${c3}%.`:""}`;
+  }
+
+  // SIP suggestion
+  const sipSuggestion = f.type==="Small Cap" || f.type==="Mid Cap"
+    ? "SIP recommended over lump sum — average out volatility over 12+ months"
+    : f.type==="Index"
+    ? "Both SIP and lump sum work well — index funds have lower timing risk"
+    : "SIP preferred — reduces timing risk and benefits from rupee cost averaging";
+
+  return {signals, whyBest, sipSuggestion};
+}
+
+function renderMFCard(f, rank, riskColor){
+  const id = `mf-${f.code}-${rank}`;
+  const isOpen = mfExpanded[id] || false;
+  const rc = ["#f59e0b","#6888a8","#8b5cf6"][rank-1]||"#6888a8";
+  const sharpeColor = parseFloat(f.sharpe)>=0.5?"#00e5a0":parseFloat(f.sharpe)>=0?"#f59e0b":"#ff4d6d";
+  const medal = rank===1?"🥇":rank===2?"🥈":"🥉";
+  const analysis = generateMFAnalysis(f, rank, riskColor);
+  const c1=round2(f.cagr1y), c3=round2(f.cagr3y), c5=round2(f.cagr5y);
+
+  // Return bar (visual)
+  const barMax = Math.max(Math.abs(c1||0), Math.abs(c3||0), Math.abs(c5||0), 5);
+  const retBar = (val, label) => val!=null ? `
+    <div style="margin-bottom:5px;">
+      <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-bottom:2px;">
+        <span>${label}</span><span style="color:${retColor(val)}">${fmtRet(val)}</span>
+      </div>
+      <div style="height:4px;background:#112038;border-radius:2px;overflow:hidden;">
+        <div style="height:100%;width:${Math.min(100,Math.abs(val)/barMax*100)}%;background:${retColor(val)};border-radius:2px;"></div>
+      </div>
+    </div>` : "";
+
+  return `
+  <div id="card-${id}" style="background:#080f1c;border:1px solid #112038;border-left:3px solid ${riskColor};
+    border-radius:10px;overflow:hidden;transition:box-shadow 0.3s;${isOpen?`box-shadow:0 0 20px ${riskColor}15;`:""}">
+
+    <!-- Collapsed header — always visible -->
+    <div onclick="toggleMFCard('${id}')" style="cursor:pointer;
+      display:grid;grid-template-columns:40px 1fr auto;gap:12px;align-items:center;padding:14px 16px;">
+      <div style="text-align:center;">
+        <div style="font-size:20px;">${medal}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:${rc};font-weight:700;">#${rank}</div>
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#ddeeff;margin-bottom:3px;">${f.name}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px;">
+          <span style="font-size:8px;background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.25);color:#3d9bff;padding:2px 7px;border-radius:4px;font-family:'IBM Plex Mono',monospace;">${f.amc}</span>
+          <span style="font-size:8px;background:${riskColor}15;border:1px solid ${riskColor}35;color:${riskColor};padding:2px 7px;border-radius:4px;font-family:'IBM Plex Mono',monospace;">${f.type}</span>
+          ${c3!=null?`<span style="font-size:8px;background:${retColor(c3)}15;border:1px solid ${retColor(c3)}35;color:${retColor(c3)};padding:2px 7px;border-radius:4px;font-family:'IBM Plex Mono',monospace;">3Y: ${fmtRet(c3)}</span>`:""}
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:#ddeeff;">₹${f.nav?.toFixed(2)||"—"}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-top:1px;">${f.navDate||""}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-top:4px;">${isOpen?"▲ hide":"▼ full analysis"}</div>
+      </div>
+    </div>
+
+    <!-- Expanded detail -->
+    ${isOpen ? `
+    <div style="border-top:1px solid #112038;padding:16px 16px 18px;">
+
+      <!-- Why this fund -->
+      <div style="background:${riskColor}08;border:1px solid ${riskColor}25;border-radius:8px;padding:12px 14px;margin-bottom:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:${riskColor};margin-bottom:6px;">Why This Fund Is Ranked #${rank}</div>
+        <div style="font-size:12px;color:#ddeeff;line-height:1.75;">${analysis.whyBest}</div>
+      </div>
+
+      <!-- Return bars -->
+      <div style="margin-bottom:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:8px;">Return History (CAGR)</div>
+        ${retBar(c1,"1 Year")}
+        ${retBar(c3,"3 Years")}
+        ${retBar(c5,"5 Years")}
+      </div>
+
+      <!-- Metrics grid -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;">
+        ${mfMetric("1Y CAGR",    fmtRet(c1),   retColor(c1))}
+        ${mfMetric("3Y CAGR",    fmtRet(c3),   retColor(c3))}
+        ${mfMetric("5Y CAGR",    fmtRet(c5),   retColor(c5))}
+        ${mfMetric("Sharpe",     f.sharpe||"—",sharpeColor)}
+        ${mfMetric("Volatility", f.stdDev+"%", f.stdDev<20?"#00e5a0":f.stdDev<30?"#f59e0b":"#ff4d6d")}
+        ${mfMetric("NAV",        "₹"+(f.nav?.toFixed(2)||"—"), "#ddeeff")}
+        ${mfMetric("NAV Date",   f.navDate||"—", "#6888a8")}
+        ${mfMetric("Data Points",f.dataPoints+" records","#6888a8")}
+      </div>
+
+      <!-- Analysis signals -->
+      <div style="margin-bottom:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#3d5878;margin-bottom:6px;">Detailed Analysis</div>
+        <div style="background:#0c1526;border-radius:8px;padding:10px 12px;">
+          ${analysis.signals.join("")}
+        </div>
+      </div>
+
+      <!-- SIP suggestion -->
+      <div style="background:rgba(61,155,255,0.06);border:1px solid rgba(61,155,255,0.2);border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:#3d9bff;margin-bottom:5px;">💡 Investment Approach</div>
+        <div style="font-size:12px;color:#ddeeff;line-height:1.65;">${analysis.sipSuggestion}</div>
+      </div>
+
+      <!-- Research links -->
+      <div class="tv-box">
+        <div class="tv-title">● Research Further</div>
+        <div class="tv-links">
+          <a class="tv-link" href="https://www.moneycontrol.com/mutual-funds/nav/search?q=${encodeURIComponent(f.name)}" target="_blank" style="color:#3d9bff;border-color:rgba(61,155,255,0.35);background:rgba(61,155,255,0.1);">📊 Moneycontrol ↗</a>
+          <a class="tv-link" href="https://www.valueresearchonline.com/funds/selector/?plan=direct" target="_blank" style="color:#8b5cf6;border-color:rgba(139,92,246,0.35);background:rgba(139,92,246,0.1);">📋 Value Research ↗</a>
+          <a class="tv-link" href="https://www.mfapi.in/" target="_blank" style="color:#f59e0b;border-color:rgba(245,158,11,0.35);background:rgba(245,158,11,0.1);">📈 AMFI Data ↗</a>
+        </div>
+      </div>
+    </div>` : ""}
+  </div>`;
+}
+
+function toggleMFCard(id){
+  mfExpanded[id] = !mfExpanded[id];
+  // Re-render all MF results
+  if(window._lastMFData) renderMFResults(window._lastMFData);
+}
+
+function renderMFResults(byCategory){
+  const riskColors = {high:"#ff4d6d", moderate:"#f59e0b", low:"#00e5a0"};
+  ["high","moderate","low"].forEach(cat=>{
+    const container = document.getElementById(
+      cat==="high"?"mfHighRisk":cat==="moderate"?"mfModRisk":"mfLowRisk"
+    );
+    if(!container) return;
+    if(byCategory[cat] && byCategory[cat].length){
+      container.innerHTML = byCategory[cat].map((f,i)=>renderMFCard(f,i+1,riskColors[cat])).join("");
+    } else {
+      container.innerHTML = `<div style="font-size:12px;color:#6888a8;padding:10px;">Could not fetch data. Please retry.</div>`;
+    }
+  });
+}
+
+async function runMFScan(){
+  const btn = document.getElementById("mfBtn");
+  btn.disabled=true; btn.innerHTML="⏳ Fetching NAV data…";
+  document.getElementById("mfIdle").style.display="none";
+  document.getElementById("mfResults").style.display="none";
+  document.getElementById("mfErrorBox").style.display="none";
+  document.getElementById("mfProgWrap").style.display="block";
+  setMFProg(0,"Initialising…");
+
+  try {
+    const allFunds = [
+      ...MF_FUNDS.high.map(f=>({...f,category:"high"})),
+      ...MF_FUNDS.moderate.map(f=>({...f,category:"moderate"})),
+      ...MF_FUNDS.low.map(f=>({...f,category:"low"})),
+    ];
+    // Deduplicate by code
+    const unique = [...new Map(allFunds.map(f=>[f.code,f])).values()];
+    const total = unique.length;
+    let done = 0;
+
+    setMFProg(5,"Fetching NAV history from AMFI via mfapi.in…");
+
+    // Fetch all in parallel batches of 5
+    const results = {};
+    for(let i=0; i<unique.length; i+=5){
+      const batch = unique.slice(i, i+5);
+      const batchResults = await Promise.all(batch.map(f=>fetchMFData(f)));
+      batchResults.forEach((r,idx)=>{
+        if(r) results[batch[idx].code] = {...r, category: batch[idx].category, type: batch[idx].type};
+        done++;
+      });
+      setMFProg(5 + Math.round(done/total*80), `Fetched ${done}/${total} funds…`);
+    }
+
+    setMFProg(88,"Computing returns and ranking…");
+
+    // Group by category and sort by score
+    const byCategory = {high:[], moderate:[], low:[]};
+    for(const [code, data] of Object.entries(results)){
+      if(data && data.cagr3y!=null){
+        // Find original category
+        for(const cat of ["high","moderate","low"]){
+          if(MF_FUNDS[cat].some(f=>f.code===code)){
+            byCategory[cat].push(data);
+            break;
+          }
+        }
+      }
+    }
+
+    Object.keys(byCategory).forEach(cat=>{
+      byCategory[cat].sort((a,b)=>b.score-a.score);
+      byCategory[cat] = byCategory[cat].slice(0,3);
+    });
+
+    // Store for re-render on expand/collapse
+    window._lastMFData = byCategory;
+    renderMFResults(byCategory);
+
+    const now = new Date().toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",timeZone:"Asia/Kolkata"});
+    document.getElementById("mfTimestamp").textContent = `NAV data as of today · Fetched at ${now} IST · Source: AMFI via mfapi.in`;
+    document.getElementById("mfSub").textContent = `${Object.values(results).filter(Boolean).length} funds analysed · Returns computed from NAV history · Updated daily`;
+
+    setMFProg(100,"Complete");
+    document.getElementById("mfResults").style.display="block";
+
+  } catch(err){
+    const eb = document.getElementById("mfErrorBox");
+    eb.innerHTML=`<b>Error:</b> ${err.message}. Please retry.`;
+    eb.style.display="block";
+    setMFProg(0,"");
+  }
+
+  document.getElementById("mfProgWrap").style.display="none";
+  btn.disabled=false; btn.innerHTML="💰 Fetch Top Mutual Funds";
+}
+
+</script>
+</body>
+</html>
