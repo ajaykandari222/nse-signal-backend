@@ -550,6 +550,122 @@ def score_fundamentals(f):
 @require_auth
 def frontend(): return render_template("index.html")
 
+
+@app.route("/hot-movers")
+@require_auth
+def hot_movers():
+    """
+    Returns today's hottest NSE movers:
+    - Upper circuit stocks
+    - Volume shockers (2x+ normal volume)
+    - Bulk & block deals (institutional activity)
+    - Top gainers & losers with technical verdict
+    """
+    try:
+        now = datetime.now(IST)
+        print(f"[HOT MOVERS] {now.strftime('%I:%M %p IST')}")
+
+        session = get_nse_session()
+
+        # Fetch all data in parallel where possible
+        from concurrent.futures import ThreadPoolExecutor, as_completed as cf_completed
+
+        results = {}
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            f_gl     = ex.submit(fetch_nse_gainers_losers, session)
+            f_circ   = ex.submit(fetch_upper_circuit_stocks, session)
+            f_bulk   = ex.submit(fetch_bulk_deals, session)
+            f_vol    = ex.submit(fetch_volume_shockers)
+
+            try: results["gainers_losers"] = f_gl.result(timeout=15)
+            except: results["gainers_losers"] = {"gainers":[],"losers":[],"active":[]}
+
+            try: results["circuits"] = f_circ.result(timeout=15)
+            except: results["circuits"] = []
+
+            try: results["bulk_deals"] = f_bulk.result(timeout=15)
+            except: results["bulk_deals"] = []
+
+            try: results["volume_shockers"] = f_vol.result(timeout=50)
+            except: results["volume_shockers"] = []
+
+        # Add block deals
+        try: results["block_deals"] = fetch_block_deals(session)
+        except: results["block_deals"] = []
+
+        # Add quick technical verdict to top gainers
+        gainers = results["gainers_losers"].get("gainers", [])[:10]
+        for g in gainers:
+            try:
+                v = quick_technical_verdict(g["symbol"])
+                if v:
+                    g["verdict"]       = v.get("verdict")
+                    g["verdict_color"] = v.get("verdict_color")
+                    g["tech_score"]    = v.get("score")
+                    g["rsi"]           = v.get("rsi")
+                    g["rel_volume"]    = v.get("rel_volume")
+                    g["reasons"]       = v.get("reasons",[])
+            except: pass
+
+        # Add quick verdict to circuit stocks
+        for c in results["circuits"][:5]:
+            try:
+                v = quick_technical_verdict(c["symbol"])
+                if v:
+                    c["verdict"]       = v.get("verdict")
+                    c["verdict_color"] = v.get("verdict_color")
+                    c["tech_score"]    = v.get("score")
+                    c["rsi"]           = v.get("rsi")
+                    c["reasons"]       = v.get("reasons",[])
+            except: pass
+
+        # Combine bulk + block deals, flag symbols with both
+        all_deals = results["bulk_deals"] + results["block_deals"]
+        deal_symbols = {}
+        for d in all_deals:
+            sym = d["symbol"]
+            if sym not in deal_symbols:
+                deal_symbols[sym] = {"symbol":sym,"deals":[],"buy_count":0,"sell_count":0}
+            deal_symbols[sym]["deals"].append(d)
+            if "BUY" in str(d.get("buy_sell","")).upper():
+                deal_symbols[sym]["buy_count"] += 1
+            else:
+                deal_symbols[sym]["sell_count"] += 1
+
+        # Sort deals — buy activity first
+        sorted_deals = sorted(deal_symbols.values(), key=lambda x: x["buy_count"], reverse=True)
+
+        return jsonify(sanitise({
+            "status":          "success",
+            "scan_time":       now.strftime("%I:%M %p IST"),
+            "date":            now.strftime("%d %b %Y, %A"),
+            "gainers":         results["gainers_losers"].get("gainers",[])[:10],
+            "losers":          results["gainers_losers"].get("losers",[])[:5],
+            "most_active":     results["gainers_losers"].get("active",[])[:8],
+            "upper_circuits":  results["circuits"][:15],
+            "volume_shockers": results["volume_shockers"][:12],
+            "bulk_block_deals":sorted_deals[:15],
+            "raw_bulk_deals":  results["bulk_deals"][:15],
+            "raw_block_deals": results["block_deals"][:10],
+        }))
+
+    except Exception as e:
+        print(f"[HOT MOVERS ERR] {e}")
+        return jsonify({"status":"error","message":str(e)}), 500
+
+@app.route("/quick-analyse/<symbol>")
+@require_auth
+def quick_analyse(symbol):
+    """Quick technical verdict for a single symbol — used by Hot Movers tab."""
+    try:
+        sym = symbol.upper().strip()
+        result = quick_technical_verdict(sym)
+        if not result:
+            return jsonify({"status":"error","message":f"No data for {sym}"}), 404
+        return jsonify({"status":"success","symbol":sym,**result})
+    except Exception as e:
+        return jsonify({"status":"error","message":str(e)}), 500
+
 @app.route("/health")
 def health():
     now = datetime.now(IST)
@@ -602,6 +718,252 @@ def indices():
         return jsonify(out)
     except Exception as e:
         return jsonify({"nifty":{},"sensex":{},"banknifty":{}}), 200
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# HOT MOVERS ENGINE
+# Sources: NSE live API + NSE bhavcopy archive + Yahoo Finance
+# ═══════════════════════════════════════════════════════════════════════
+
+NSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.nseindia.com/",
+    "Connection": "keep-alive",
+}
+
+def get_nse_session():
+    """Create NSE session with cookies."""
+    s = requests.Session()
+    try:
+        s.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=8)
+        s.get("https://www.nseindia.com/market-data/live-equity-market", headers=NSE_HEADERS, timeout=5)
+    except: pass
+    return s
+
+def fetch_nse_gainers_losers(session):
+    """Fetch top gainers, losers, most active from NSE."""
+    result = {"gainers": [], "losers": [], "active": []}
+    endpoints = {
+        "gainers": "https://www.nseindia.com/api/live-analysis-variations?index=gainers",
+        "losers":  "https://www.nseindia.com/api/live-analysis-variations?index=losers",
+        "active":  "https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume",
+    }
+    for key, url in endpoints.items():
+        try:
+            r = session.get(url, headers=NSE_HEADERS, timeout=8)
+            if r.ok:
+                data = r.json()
+                items = data.get("data") or []
+                cleaned = []
+                for item in items[:20]:
+                    sym = item.get("symbol", "").strip().upper()
+                    if not sym: continue
+                    cleaned.append({
+                        "symbol":      sym,
+                        "ltp":         item.get("lastPrice") or item.get("ltp") or 0,
+                        "change_pct":  item.get("pChange") or item.get("percentChange") or 0,
+                        "volume":      item.get("totalTradedVolume") or item.get("quantityTraded") or 0,
+                        "value":       item.get("totalTradedValue") or 0,
+                        "prev_close":  item.get("previousPrice") or item.get("previousClose") or 0,
+                    })
+                result[key] = cleaned
+        except Exception as e:
+            print(f"[NSE {key}] {e}")
+    return result
+
+def fetch_upper_circuit_stocks(session):
+    """
+    Fetch stocks hitting upper circuit from NSE.
+    Uses the live-circuit-filter endpoint.
+    """
+    circuits = []
+    try:
+        urls = [
+            "https://www.nseindia.com/api/live-analysis-data-for-alerts?index=uppercircuit",
+            "https://www.nseindia.com/api/live-analysis-variations?index=toGainers&type=pct",
+        ]
+        for url in urls:
+            try:
+                r = session.get(url, headers=NSE_HEADERS, timeout=8)
+                if r.ok:
+                    data = r.json()
+                    items = data.get("data") or []
+                    for item in items[:30]:
+                        sym = item.get("symbol","").strip().upper()
+                        if not sym: continue
+                        circuits.append({
+                            "symbol":     sym,
+                            "ltp":        item.get("lastPrice") or item.get("ltp") or 0,
+                            "change_pct": item.get("pChange") or item.get("percentChange") or 0,
+                            "circuit_pct":item.get("pChange") or 0,
+                            "volume":     item.get("totalTradedVolume") or 0,
+                            "series":     item.get("series","EQ"),
+                        })
+                    if circuits: break
+            except: continue
+    except Exception as e:
+        print(f"[CIRCUIT] {e}")
+
+    # Deduplicate
+    seen = set()
+    unique = []
+    for c in circuits:
+        if c["symbol"] not in seen:
+            seen.add(c["symbol"])
+            unique.append(c)
+    return unique
+
+def fetch_bulk_deals(session):
+    """Fetch today's bulk deals from NSE."""
+    deals = []
+    try:
+        r = session.get(
+            "https://www.nseindia.com/api/bulk-deals",
+            headers=NSE_HEADERS, timeout=8
+        )
+        if r.ok:
+            data = r.json()
+            items = data.get("data") or []
+            for item in items[:30]:
+                sym = item.get("symbol","").strip().upper()
+                if not sym: continue
+                deals.append({
+                    "symbol":    sym,
+                    "client":    item.get("clientName","—"),
+                    "buy_sell":  item.get("buySell","—"),
+                    "quantity":  item.get("quantityTraded",0),
+                    "price":     item.get("tradePrice",0),
+                    "date":      item.get("date",""),
+                })
+    except Exception as e:
+        print(f"[BULK DEALS] {e}")
+    return deals
+
+def fetch_block_deals(session):
+    """Fetch today's block deals from NSE."""
+    deals = []
+    try:
+        r = session.get(
+            "https://www.nseindia.com/api/block-deals",
+            headers=NSE_HEADERS, timeout=8
+        )
+        if r.ok:
+            data = r.json()
+            items = data.get("data") or []
+            for item in items[:20]:
+                sym = item.get("symbol","").strip().upper()
+                if not sym: continue
+                deals.append({
+                    "symbol":   sym,
+                    "client":   item.get("clientName","—"),
+                    "buy_sell": item.get("buySell","—"),
+                    "quantity": item.get("quantityTraded",0),
+                    "price":    item.get("tradePrice",0),
+                })
+    except Exception as e:
+        print(f"[BLOCK DEALS] {e}")
+    return deals
+
+def fetch_volume_shockers():
+    """
+    Find stocks with extreme volume today vs their 20-day average.
+    Uses Yahoo Finance — most reliable free source for volume data.
+    Cross-references top 100 watchlist stocks.
+    """
+    yf = get_yf()
+    shockers = []
+    # Check top 100 most liquid stocks for volume anomalies
+    check_list = WATCHLIST[:100]
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    def check_volume(sym):
+        try:
+            ticker = yf.Ticker(get_ns(sym))
+            intra  = ticker.history(period="1d",  interval="5m", auto_adjust=True)
+            daily  = ticker.history(period="30d", interval="1d", auto_adjust=True)
+            if daily is None or len(daily) < 5: return None
+            avg_vol = float(daily["Volume"].squeeze().iloc[-20:].mean()) if len(daily)>=20 else float(daily["Volume"].squeeze().mean())
+            today_vol = float(daily["Volume"].squeeze().iloc[-1])
+            rel = round(today_vol/avg_vol, 1) if avg_vol>0 else 1.0
+            if rel < 2.0: return None  # only show 2x+ volume
+            cmp = float(daily["Close"].squeeze().iloc[-1])
+            prev= float(daily["Close"].squeeze().iloc[-2])
+            chg = round((cmp-prev)/prev*100,2)
+            return {
+                "symbol":     sym,
+                "ltp":        round(cmp,2),
+                "change_pct": chg,
+                "rel_volume": rel,
+                "volume":     int(today_vol),
+                "avg_volume": int(avg_vol),
+            }
+        except: return None
+
+    with ThreadPoolExecutor(max_workers=15) as ex:
+        futures = {ex.submit(check_volume, sym): sym for sym in check_list}
+        for f in as_completed(futures, timeout=45):
+            try:
+                r = f.result(timeout=6)
+                if r: shockers.append(r)
+            except: pass
+
+    shockers.sort(key=lambda x: x["rel_volume"], reverse=True)
+    return shockers[:15]
+
+def quick_technical_verdict(sym):
+    """Quick technical check — BUY/WATCH/AVOID for a hot mover."""
+    try:
+        yf = get_yf(); ta = get_ta()
+        ticker = yf.Ticker(get_ns(sym))
+        daily  = ticker.history(period="60d", interval="1d", auto_adjust=True)
+        if daily is None or len(daily)<26: return None
+        close = daily["Close"].squeeze().astype(float)
+        volume= daily["Volume"].squeeze().astype(float)
+        mask  = close.notna()&(close>0)
+        close = close[mask]; volume=volume[mask]
+        rsi   = float(ta.momentum.RSIIndicator(close=close,window=14).rsi().iloc[-1])
+        ema20 = float(ta.trend.EMAIndicator(close=close,window=20).ema_indicator().iloc[-1])
+        ema50 = float(ta.trend.EMAIndicator(close=close,window=50).ema_indicator().iloc[-1])
+        macd  = ta.trend.MACD(close=close,window_slow=26,window_fast=12,window_sign=9)
+        mhist = float(macd.macd_diff().iloc[-1])
+        mprev = float(macd.macd_diff().iloc[-2])
+        cmp   = float(close.iloc[-1])
+        avg_v = float(volume.iloc[-20:].mean()) if len(volume)>=20 else float(volume.mean())
+        rel_v = round(float(volume.iloc[-1])/avg_v,1) if avg_v>0 else 1.0
+        w52h  = float(close.max())
+        pct52 = round((cmp-w52h)/w52h*100,1)
+
+        # Quick score
+        score = 0
+        reasons = []
+        if 45<=rsi<=72:    score+=2; reasons.append(f"RSI {round(rsi,1)} — momentum zone ✓")
+        elif rsi>72:       score-=1; reasons.append(f"RSI {round(rsi,1)} — overbought ⚠")
+        else:              score-=1; reasons.append(f"RSI {round(rsi,1)} — weak ✗")
+        if mhist>0 and mhist>mprev: score+=2; reasons.append("MACD expanding bullish ✓")
+        elif mhist>0:               score+=1; reasons.append("MACD positive but fading")
+        else:                       score-=1; reasons.append("MACD bearish ✗")
+        if cmp>ema20:  score+=1; reasons.append(f"Above EMA20 ₹{round(ema20,1)} ✓")
+        if ema20>ema50:score+=1; reasons.append("Golden cross EMA20>EMA50 ✓")
+        if rel_v>=2.0: score+=2; reasons.append(f"Volume {rel_v}x avg — strong conviction ✓")
+        if pct52>=-5:  score+=1; reasons.append(f"Near 52W high ({pct52}%) — breakout zone ✓")
+
+        if score>=6:   verdict="STRONG BUY"; vc="#00e5a0"
+        elif score>=4: verdict="BUY/WATCH";  vc="#3d9bff"
+        elif score>=2: verdict="WATCH";      vc="#f59e0b"
+        else:          verdict="AVOID";      vc="#ff4d6d"
+
+        return sanitise({
+            "symbol":sym,
+            "verdict":verdict,"verdict_color":vc,"score":score,
+            "rsi":round(rsi,1),"macd_hist":round(mhist,3),
+            "ema20":round(ema20,2),"ema50":round(ema50,2),
+            "rel_volume":rel_v,"pct_from_52h":pct52,"cmp":round(cmp,2),
+            "reasons":reasons,
+        })
+    except: return None
+
 
 @app.route("/analyse/<symbol>")
 @require_auth
