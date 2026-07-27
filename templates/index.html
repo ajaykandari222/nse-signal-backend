@@ -142,6 +142,9 @@
     <button class="tabbtn" id="tab-mf" onclick="switchTab('mf')">
       💰 Mutual Funds <span class="tabsub">top 3 per risk category</span>
     </button>
+    <button class="tabbtn" id="tab-hot" onclick="switchTab('hot')">
+      🔥 Hot Movers <span class="tabsub">circuits · bulk deals · volume</span>
+    </button>
   </div>
 
   <!-- ══════════════ SHORT-TERM TAB ══════════════ -->
@@ -580,6 +583,138 @@
   </div>
 
   </div> <!-- end panel-mf -->
+
+  <!-- ══════════════ HOT MOVERS TAB ══════════════ -->
+  <div id="panel-hot" class="tabpanel" style="display:none;">
+
+  <div style="text-align:center;padding:16px 0 12px;">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:4px;text-transform:uppercase;color:#ff4d6d;margin-bottom:6px;">
+      Upper Circuits · Volume Shockers · Bulk Deals · Top Gainers
+    </div>
+    <h2 style="font-size:clamp(16px,3vw,22px);font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;">
+      Today's <span style="background:linear-gradient(90deg,#ff4d6d,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Hot Movers</span>
+    </h2>
+    <p style="font-size:12px;color:#6888a8;max-width:520px;margin:0 auto;line-height:1.75;">
+      Catches stocks like E2E, Kernex, Refex — upper circuit hitters, volume explosions, institutional bulk deals, and momentum gainers across the entire NSE universe.
+    </p>
+  </div>
+
+  <!-- What this catches -->
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px;">
+    <div style="background:#080f1c;border:1px solid rgba(255,77,109,0.2);border-radius:9px;padding:12px 14px;">
+      <div style="font-size:16px;margin-bottom:5px;">🔴</div>
+      <div style="font-size:11px;font-weight:700;color:#ff4d6d;margin-bottom:3px;">Upper Circuit Stocks</div>
+      <div style="font-size:10px;color:#6888a8;line-height:1.5;">Stocks hitting 5-20% upper circuit — exactly like E2E Networks, Kernex, Refex. Consecutive circuit days shown.</div>
+    </div>
+    <div style="background:#080f1c;border:1px solid rgba(245,158,11,0.2);border-radius:9px;padding:12px 14px;">
+      <div style="font-size:16px;margin-bottom:5px;">💥</div>
+      <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:3px;">Volume Shockers</div>
+      <div style="font-size:10px;color:#6888a8;line-height:1.5;">2x-10x normal volume — institutional accumulation before a big move. Often appears 1-2 days before the circuit run.</div>
+    </div>
+    <div style="background:#080f1c;border:1px solid rgba(61,155,255,0.2);border-radius:9px;padding:12px 14px;">
+      <div style="font-size:16px;margin-bottom:5px;">🏦</div>
+      <div style="font-size:11px;font-weight:700;color:#3d9bff;margin-bottom:3px;">Bulk & Block Deals</div>
+      <div style="font-size:10px;color:#6888a8;line-height:1.5;">Institutional buying from NSE bulk/block deal data. L&T buying E2E showed up here before retail noticed.</div>
+    </div>
+    <div style="background:#080f1c;border:1px solid rgba(0,229,160,0.2);border-radius:9px;padding:12px 14px;">
+      <div style="font-size:16px;margin-bottom:5px;">📈</div>
+      <div style="font-size:11px;font-weight:700;color:#00e5a0;margin-bottom:3px;">Top Gainers + Technical</div>
+      <div style="font-size:10px;color:#6888a8;line-height:1.5;">NSE top gainers with RSI, MACD overlay — filters out overbought ones and highlights technically strong movers.</div>
+    </div>
+  </div>
+
+  <!-- Scan button -->
+  <div style="background:#080f1c;border:1px solid rgba(255,77,109,0.25);border-radius:12px;padding:18px 22px;margin-bottom:14px;text-align:center;">
+    <button onclick="runHotMovers()" id="hotBtn"
+      style="background:linear-gradient(135deg,#ff4d6d,#f59e0b);color:#000;border:none;
+      border-radius:9px;padding:13px 44px;font-family:'Inter',sans-serif;font-weight:800;
+      font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:9px;
+      box-shadow:0 4px 20px rgba(255,77,109,0.3);">
+      🔥 Scan Hot Movers Now
+    </button>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-top:8px;" id="hotSub">
+      NSE upper circuits · Bulk/block deals · Volume shockers · Top gainers with technical verdict · ~30 seconds
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div id="hotProgWrap" style="display:none;margin-bottom:12px;">
+    <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;margin-bottom:4px;">
+      <span id="hotProgLbl">Scanning…</span><span id="hotProgPct">0%</span>
+    </div>
+    <div style="height:3px;background:#112038;border-radius:2px;overflow:hidden;">
+      <div id="hotProgFill" style="height:100%;width:0%;background:linear-gradient(90deg,#ff4d6d,#f59e0b);border-radius:2px;transition:width 0.5s ease;"></div>
+    </div>
+  </div>
+
+  <div id="hotErrorBox" class="error-box" style="display:none;"></div>
+
+  <!-- Results -->
+  <div id="hotResults" style="display:none;">
+
+    <!-- Timestamp -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #112038;">
+      <div id="hotTimestamp" style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#3d5878;"></div>
+      <span style="font-size:8px;background:rgba(255,77,109,0.1);border:1px solid rgba(255,77,109,0.3);color:#ff4d6d;padding:2px 9px;border-radius:10px;font-family:'IBM Plex Mono',monospace;">LIVE NSE DATA</span>
+    </div>
+
+    <!-- Upper Circuits -->
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:14px;">🔴</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:#ff4d6d;">UPPER CIRCUIT STOCKS</span>
+        <span id="hotCircuitCount" style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;"></span>
+      </div>
+      <div id="hotCircuits" style="display:grid;gap:7px;"></div>
+    </div>
+
+    <!-- Volume Shockers -->
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:14px;">💥</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:#f59e0b;">VOLUME SHOCKERS — 2x+ Normal Volume</span>
+        <span id="hotVolCount" style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;"></span>
+      </div>
+      <div id="hotVolume" style="display:grid;gap:7px;"></div>
+    </div>
+
+    <!-- Bulk & Block Deals -->
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:14px;">🏦</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:#3d9bff;">BULK & BLOCK DEALS — Institutional Activity</span>
+        <span id="hotDealCount" style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;"></span>
+      </div>
+      <div id="hotDeals" style="display:grid;gap:7px;"></div>
+    </div>
+
+    <!-- Top Gainers with Technical -->
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:14px;">📈</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:#00e5a0;">TOP GAINERS + TECHNICAL VERDICT</span>
+      </div>
+      <div id="hotGainers" style="display:grid;gap:7px;"></div>
+    </div>
+
+  </div>
+
+  <!-- Idle -->
+  <div id="hotIdle" style="text-align:center;padding:36px 16px;">
+    <div style="font-size:36px;opacity:0.15;margin-bottom:12px;">🔥</div>
+    <p style="font-size:12px;color:#6888a8;line-height:1.9;max-width:460px;margin:0 auto;">
+      Press <b style="color:#ddeeff">Scan Hot Movers Now</b>.<br>
+      Fetches upper circuit stocks, bulk/block deals, and volume shockers directly from NSE. These are the stocks like E2E, Kernex, Refex that pure technical scanners miss — caught here through circuit data and institutional deal flow.
+    </p>
+  </div>
+
+  <div style="margin-top:20px;padding:11px 14px;border-left:3px solid #ff4d6d;background:rgba(255,77,109,0.03);border-radius:0 6px 6px 0;font-size:10px;color:#3d5878;line-height:1.8;">
+    <b style="color:#ff4d6d;">Warning:</b> Upper circuit stocks and momentum plays carry extreme risk. Stocks hitting circuits often have thin liquidity — easy to buy, hard to sell.
+    Bulk deals show institutional activity but not intent. Always check the reason behind a circuit move — news, results, or operator activity.
+    This tab is for awareness, not a buy recommendation. Not SEBI-registered advice.
+  </div>
+
+  </div> <!-- end panel-hot -->
 </div> <!-- end main -->
 
 <script>
@@ -1486,7 +1621,7 @@ async function runSectorPulse(){
 // Update switchTab to handle sector tab
 const _origSwitchTab = switchTab;
 switchTab = function(tab){
-  ["short","long","analyse","sector","mf"].forEach(t=>{
+  ["short","long","analyse","sector","mf","hot"].forEach(t=>{
     document.getElementById("tab-"+t)?.classList.toggle("active", t===tab);
     const p=document.getElementById("panel-"+t);
     if(p) p.style.display=t===tab?"block":"none";
@@ -1497,6 +1632,7 @@ switchTab = function(tab){
     analyse:["Technical + Fundamental + Market Regime + Promoter","Analyse <span class='grad'>Any NSE Stock</span>"],
     sector: ["News Sentiment + Seasonality + Technical Momentum","Which Sectors Are <span style='background:linear-gradient(90deg,#f59e0b,#ef4444);-webkit-background-clip:text;-webkit-text-fill-color:transparent;'>Booming Right Now?</span>"],
     mf:     ["Live NAV · 1Y/3Y/5Y Returns · Sharpe Ratio · Risk Grade","Top <span style='background:linear-gradient(90deg,#f59e0b,#00e5a0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;'>Mutual Funds</span> by Risk Category"],
+    hot:    ["Upper Circuits · Volume Shockers · Bulk Deals · NSE Live","Today's <span style='background:linear-gradient(90deg,#ff4d6d,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;'>Hot Movers</span>"],
   };
   const m=heroMap[tab];
   if(m){
@@ -1935,6 +2071,270 @@ async function runMFScan(){
 
   document.getElementById("mfProgWrap").style.display="none";
   btn.disabled=false; btn.innerHTML="💰 Fetch Top Mutual Funds";
+}
+
+
+// ═══════════════════════════════════════════════════════
+// HOT MOVERS
+// ═══════════════════════════════════════════════════════
+function setHProg(pct,lbl){
+  const f=document.getElementById("hotProgFill");
+  const p=document.getElementById("hotProgPct");
+  const l=document.getElementById("hotProgLbl");
+  if(f) f.style.width=pct+"%";
+  if(p) p.textContent=pct+"%";
+  if(l&&lbl!==undefined) l.textContent=lbl;
+}
+
+const fmtNum2 = n => n==null?"—":Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
+const fmtVol2 = n => !n?"—":n>=1e7?(n/1e7).toFixed(1)+"Cr":n>=1e5?(n/1e5).toFixed(1)+"L":Number(n).toLocaleString();
+
+function verdictBadge(verdict, color){
+  if(!verdict) return "";
+  return `<span style="font-size:8px;background:${color}18;border:1px solid ${color}40;
+    color:${color};padding:2px 8px;border-radius:4px;
+    font-family:'IBM Plex Mono',monospace;font-weight:700;">${verdict}</span>`;
+}
+
+function analyseHotStock(sym){
+  document.getElementById("stockInput").value = sym;
+  switchTab("analyse");
+  analyseStock();
+}
+
+function renderCircuitCard(s){
+  const cc = s.change_pct>=0 ? "#ff4d6d" : "#00e5a0"; // circuits are up
+  const vc = s.verdict_color || "#f59e0b";
+  return `
+  <div style="background:#080f1c;border:1px solid rgba(255,77,109,0.2);border-left:3px solid #ff4d6d;
+    border-radius:9px;padding:12px 14px;">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:#ddeeff;">${s.symbol}</span>
+          <span style="font-size:9px;background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.4);
+            color:#ff4d6d;padding:2px 8px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-weight:800;">
+            🔴 UPPER CIRCUIT</span>
+          ${s.verdict ? verdictBadge(s.verdict, vc) : ""}
+          ${s.series && s.series!=="EQ" ? `<span style="font-size:8px;color:#6888a8;font-family:'IBM Plex Mono',monospace;">${s.series}</span>` : ""}
+        </div>
+        ${s.reasons && s.reasons.length ? `
+        <div style="font-size:10px;color:#6888a8;margin-top:4px;line-height:1.6;">
+          ${s.reasons.slice(0,2).map(r=>r.replace(" ✓","✓").replace(" ✗","✗")).join(" · ")}
+        </div>` : ""}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:#ddeeff;">
+          ₹${fmtNum2(s.ltp)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:#ff4d6d;">
+          +${s.change_pct?.toFixed(2)||0}%</div>
+        ${s.volume ? `<div style="font-family:'IBM Plex Mono',monospace;font-size:8px;color:#3d5878;margin-top:2px;">
+          Vol: ${fmtVol2(s.volume)}</div>` : ""}
+        <div style="margin-top:6px;">
+          <button onclick="analyseHotStock('${s.symbol}')"
+            style="font-size:9px;background:rgba(255,77,109,0.15);border:1px solid rgba(255,77,109,0.35);
+            color:#ff4d6d;padding:4px 10px;border-radius:5px;cursor:pointer;
+            font-family:'IBM Plex Mono',monospace;font-weight:700;">
+            Full Analysis →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderVolumeCard(s){
+  const cc = s.change_pct>=0?"#00e5a0":"#ff4d6d";
+  const volColor = s.rel_volume>=5?"#ff4d6d":s.rel_volume>=3?"#f59e0b":"#3d9bff";
+  return `
+  <div style="background:#080f1c;border:1px solid rgba(245,158,11,0.2);border-left:3px solid ${volColor};
+    border-radius:9px;padding:12px 14px;">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:#ddeeff;">${s.symbol}</span>
+          <span style="font-size:9px;background:${volColor}18;border:1px solid ${volColor}40;
+            color:${volColor};padding:2px 8px;border-radius:4px;
+            font-family:'IBM Plex Mono',monospace;font-weight:800;">
+            💥 ${s.rel_volume}x VOLUME</span>
+        </div>
+        <div style="display:flex;gap:5px;align-items:center;margin-top:3px;">
+          <div style="flex:1;max-width:120px;height:4px;background:#112038;border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${Math.min(100,(s.rel_volume/10)*100)}%;background:${volColor};border-radius:2px;"></div>
+          </div>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#6888a8;">
+            ${fmtVol2(s.volume)} vs avg ${fmtVol2(s.avg_volume)}</span>
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:#ddeeff;">
+          ₹${fmtNum2(s.ltp)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${cc};">
+          ${s.change_pct>=0?"+":""}${s.change_pct?.toFixed(2)||0}%</div>
+        <div style="margin-top:6px;">
+          <button onclick="analyseHotStock('${s.symbol}')"
+            style="font-size:9px;background:${volColor}18;border:1px solid ${volColor}35;
+            color:${volColor};padding:4px 10px;border-radius:5px;cursor:pointer;
+            font-family:'IBM Plex Mono',monospace;font-weight:700;">
+            Analyse →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDealCard(d){
+  const isBuy = d.buy_count > d.sell_count;
+  const dc = isBuy ? "#00e5a0" : "#ff4d6d";
+  const icon = isBuy ? "🟢 BUY" : "🔴 SELL";
+  const topDeal = d.deals[0] || {};
+  return `
+  <div style="background:#080f1c;border:1px solid rgba(61,155,255,0.2);border-left:3px solid ${dc};
+    border-radius:9px;padding:12px 14px;">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:#ddeeff;">${d.symbol}</span>
+          <span style="font-size:9px;background:${dc}15;border:1px solid ${dc}35;
+            color:${dc};padding:2px 8px;border-radius:4px;font-family:'IBM Plex Mono',monospace;font-weight:800;">
+            🏦 ${icon}</span>
+          <span style="font-size:8px;color:#6888a8;font-family:'IBM Plex Mono',monospace;">
+            ${d.deals.length} deal${d.deals.length>1?"s":""}</span>
+        </div>
+        ${d.deals.slice(0,2).map(deal=>`
+        <div style="font-size:10px;color:#6888a8;line-height:1.7;margin-top:3px;">
+          <span style="color:${dc};font-weight:700;">${deal.buy_sell||"—"}</span>
+          ${deal.client ? `· <span style="color:#ddeeff;">${deal.client}</span>` : ""}
+          ${deal.quantity ? `· Qty: ${Number(deal.quantity).toLocaleString()}` : ""}
+          ${deal.price ? `· @₹${Number(deal.price).toLocaleString("en-IN",{maximumFractionDigits:2})}` : ""}
+        </div>`).join("")}
+      </div>
+      <div style="text-align:right;padding-top:2px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#3d5878;">
+          ${isBuy?`${d.buy_count} BUY`:`${d.sell_count} SELL`}</div>
+        <button onclick="analyseHotStock('${d.symbol}')"
+          style="font-size:9px;background:rgba(61,155,255,0.1);border:1px solid rgba(61,155,255,0.3);
+          color:#3d9bff;padding:4px 10px;border-radius:5px;cursor:pointer;
+          font-family:'IBM Plex Mono',monospace;font-weight:700;margin-top:8px;">
+          Analyse →
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderGainerCard(g){
+  const cc = g.change_pct>=0?"#00e5a0":"#ff4d6d";
+  const vc = g.verdict_color || "#f59e0b";
+  return `
+  <div style="background:#080f1c;border:1px solid rgba(0,229,160,0.15);border-left:3px solid ${cc};
+    border-radius:9px;padding:12px 14px;">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:800;color:#ddeeff;">${g.symbol}</span>
+          ${g.verdict ? verdictBadge(g.verdict, vc) : ""}
+          ${g.rsi ? `<span style="font-size:8px;color:#6888a8;font-family:'IBM Plex Mono',monospace;">RSI ${g.rsi}</span>` : ""}
+          ${g.rel_volume>=2 ? `<span style="font-size:8px;background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.25);color:#06b6d4;padding:2px 7px;border-radius:4px;font-family:'IBM Plex Mono',monospace;">VOL ${g.rel_volume}x</span>` : ""}
+        </div>
+        ${g.reasons && g.reasons.length ? `
+        <div style="font-size:10px;color:#6888a8;line-height:1.5;">
+          ${g.reasons.slice(0,2).map(r=>r.replace(" ✓","✓").replace(" ✗","✗")).join(" · ")}
+        </div>` : ""}
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:800;color:#ddeeff;">
+          ₹${fmtNum2(g.ltp)}</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:${cc};">
+          ${g.change_pct>=0?"+":""}${g.change_pct?.toFixed(2)||0}%</div>
+        <div style="margin-top:6px;">
+          <button onclick="analyseHotStock('${g.symbol}')"
+            style="font-size:9px;background:rgba(0,229,160,0.1);border:1px solid rgba(0,229,160,0.3);
+            color:#00e5a0;padding:4px 10px;border-radius:5px;cursor:pointer;
+            font-family:'IBM Plex Mono',monospace;font-weight:700;">
+            Full Analysis →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function noDataMsg(msg){
+  return `<div style="font-size:12px;color:#6888a8;padding:14px;text-align:center;
+    border:1px dashed #112038;border-radius:8px;">${msg}</div>`;
+}
+
+async function runHotMovers(){
+  const btn = document.getElementById("hotBtn");
+  btn.disabled=true; btn.innerHTML=`<span class="spinner" style="border:2px solid rgba(0,0,0,0.3);border-top-color:#000;width:13px;height:13px;border-radius:50%;display:inline-block;animation:spin 0.65s linear infinite;"></span> Scanning…`;
+  document.getElementById("hotIdle").style.display="none";
+  document.getElementById("hotResults").style.display="none";
+  document.getElementById("hotErrorBox").style.display="none";
+  document.getElementById("hotProgWrap").style.display="block";
+  setHProg(0,"");
+
+  try{
+    setHProg(10,"Connecting to NSE…");
+    const h = await fetch(`${BACKEND}/health`);
+    if(!h.ok) throw new Error("Backend not responding");
+
+    setHProg(20,"Fetching upper circuits, bulk deals, volume shockers from NSE…");
+    document.getElementById("hotProgLbl").textContent = "Fetching circuits + bulk deals + volume shockers (~30 sec)…";
+
+    const r = await fetch(`${BACKEND}/hot-movers`);
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    if(d.status==="error") throw new Error(d.message);
+
+    setHProg(90,"Rendering results…");
+
+    // Timestamp
+    document.getElementById("hotTimestamp").textContent = `${d.date} · ${d.scan_time} · Source: NSE live data`;
+    document.getElementById("hotSub").textContent = `${d.upper_circuits?.length||0} circuits · ${d.volume_shockers?.length||0} volume shockers · ${d.bulk_block_deals?.length||0} bulk/block deals · ${d.date}`;
+
+    // Upper circuits
+    const circuits = d.upper_circuits || [];
+    document.getElementById("hotCircuitCount").textContent = `${circuits.length} stocks`;
+    document.getElementById("hotCircuits").innerHTML = circuits.length
+      ? circuits.map(s=>renderCircuitCard(s)).join("")
+      : noDataMsg("No upper circuit stocks found via NSE API — market may be closed or NSE API is unavailable. Check nseindia.com directly.");
+
+    // Volume shockers
+    const vols = d.volume_shockers || [];
+    document.getElementById("hotVolCount").textContent = `${vols.length} stocks`;
+    document.getElementById("hotVolume").innerHTML = vols.length
+      ? vols.map(s=>renderVolumeCard(s)).join("")
+      : noDataMsg("No significant volume anomalies detected in the top 100 stocks today.");
+
+    // Bulk/block deals
+    const deals = d.bulk_block_deals || [];
+    document.getElementById("hotDealCount").textContent = `${deals.length} symbols`;
+    document.getElementById("hotDeals").innerHTML = deals.length
+      ? deals.map(d=>renderDealCard(d)).join("")
+      : noDataMsg("No bulk or block deals reported today yet. NSE publishes these throughout the trading session.");
+
+    // Top gainers
+    const gainers = d.gainers || [];
+    document.getElementById("hotGainers").innerHTML = gainers.length
+      ? gainers.map(g=>renderGainerCard(g)).join("")
+      : noDataMsg("No gainer data available — NSE API may be unavailable.");
+
+    setHProg(100,"Complete");
+    document.getElementById("hotResults").style.display="block";
+    setTimeout(()=>{ document.getElementById("hotProgWrap").style.display="none"; },800);
+
+  }catch(err){
+    const eb=document.getElementById("hotErrorBox");
+    eb.innerHTML=`<b>Error:</b> ${err.message}`;
+    eb.style.display="block";
+    document.getElementById("hotProgWrap").style.display="none";
+    setHProg(0,"");
+  }
+
+  btn.disabled=false;
+  btn.innerHTML="🔥 Scan Hot Movers Now";
 }
 
 </script>
