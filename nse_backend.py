@@ -112,6 +112,7 @@ def get_ns(sym): return sym.replace("&","%26") + ".NS"
 
 # ── WATCHLIST ─────────────────────────────────────────────────────────────
 WATCHLIST = list(dict.fromkeys([
+    # Large caps - NIFTY 50
     "RELIANCE","TCS","HDFCBANK","INFY","ICICIBANK","HINDUNILVR","SBIN","BHARTIARTL",
     "KOTAKBANK","LT","AXISBANK","ASIANPAINT","MARUTI","TITAN","BAJFINANCE","WIPRO",
     "TECHM","ULTRACEMCO","ONGC","NTPC","POWERGRID","SUNPHARMA","TATAMOTORS","HCLTECH",
@@ -119,59 +120,25 @@ WATCHLIST = list(dict.fromkeys([
     "DRREDDY","CIPLA","DIVISLAB","APOLLOHOSP","BAJAJFINSV","EICHERMOT","HEROMOTOCO",
     "ADANIENT","ADANIPORTS","LTIM","INDUSINDBK","ITC","VEDL","GRASIM","TATACONSUM",
     "BRITANNIA","BAJAJ-AUTO","SIEMENS","ABB","HAVELLS","PIDILITIND","BERGEPAINT",
+    # Mid caps - high quality
     "MUTHOOTFIN","CHOLAFIN","SBILIFE","HDFCLIFE","ICICIGI","MARICO","COLPAL","DABUR",
     "GODREJCP","SAIL","NMDC","AMBUJACEM","SHREECEM","IRCTC","IRFC","RVNL","BEL","HAL",
     "BHEL","TRENT","IDFCFIRSTB","BANDHANBNK","FEDERALBNK","TORNTPHARM","LUPIN",
     "AUROPHARMA","ZYDUSLIFE","ALKEM","BIOCON","ZOMATO","NYKAA","DMART","DIXON",
     "VOLTAS","POLYCAB","KPITTECH","MPHASIS","LTTS","PERSISTENT","COFORGE","BALKRISIND",
     "APOLLOTYRE","MRF","INDIGO","GMRINFRA","CUMMINSIND","ASTRAL","CONCOR","TATACOMM",
-    "BEML","ANGELONE","CDSL","MCX","CAMS","POLICYBZR","PAYTM","NAUKRI","INFOEDGE",
-    "LICI","MAXHEALTH","FORTIS","DEEPAKNTR","NAVINFLUOR","TATACHEM","IIFL","IREDA",
-    "NHPC","SJVN","RECLTD","PFC","LODHA","DLF","GODREJPROP","RADICO","JUBLFOOD",
-    "MOTHERSON","BOSCHLTD","TIINDIA","ENDURANCE","ADANIGREEN","ADANIPOWER","TATAPOWER",
-    "TORNTPOWER","MANAPPURAM","MOTILALOSW","CANFINHOME","AAVAS","SENCO","KALYAN",
+    "BEML","ANGELONE","CDSL","MCX","CAMS","NAUKRI","INFOEDGE","LICI","MAXHEALTH",
+    "FORTIS","DEEPAKNTR","NAVINFLUOR","TATACHEM","IREDA","NHPC","SJVN","RECLTD","PFC",
+    "LODHA","DLF","GODREJPROP","RADICO","JUBLFOOD","MOTHERSON","BOSCHLTD","TIINDIA",
+    "ADANIGREEN","ADANIPOWER","TATAPOWER","TORNTPOWER","MANAPPURAM","CANFINHOME",
     "APLAPOLLO","RATNAMANI","RAILTEL","PAGEIND","ABCAPITAL","RBLBANK","SUNDARMFIN",
     "KAYNES","SYRMA","AMBER","TATAELXSI","GRSE","COCHINSHIP","MAZAGON","GARDENREACH",
-    "COROMANDEL","PIIND","CHAMBLFERT","GNFC","RALLIS","DHANUKA","KRBL","AVANTIFEED",
-    "JKCEMENT","DALMIACEM","RAMCOCEM","BIRLASOFT","MASTEK","ZENSAR","INTELLECT",
-    "TANLA","ROUTE","SONATASOFT","CYIENT","CLEANSCIENCE","FINEORG","ALKYLAMINE",
-    "VINATIORG","AARTI","DEEPAKFERT","CAPACITE","KNR","HGINFRA","PNCINFRA","ASHOKA",
-    "METROPOLIS","THYROCARE","LALGPATH","GRANULES","WOCKHARDT","GLENMARK","JBCHEPHARM",
-    # Mid-small caps missed earlier — chemicals, rubber, specialty
-    "APCOTEXIND","AAVAS","APTUS","CREDITACC","SPANDANA","UJJIVANSFB","EQUITASBNK",
-    "SURYODAY","UTKARSHBNK","ESAFSFB","SBFC","UGRO","PAISALO","ARMANFIN",
-    # Specialty chemicals
-    "AARTIIND","NAVINFLUOR","FINEORG","ALKYLAMINE","VINATIORG","DEEPAKFERT",
-    "AARTI","TATACHEM","GNFC","CHAMBLFERT","COROMANDEL","SUMICHEM","INSECTICID",
-    "DHANUKA","PIIND","RALLIS","BAYER","HERANBA","SAHYADRI","GHCL","GUJALKALI",
-    # Defence / PSU midcaps  
-    "MIDHANI","MTAR","DATAPATTNS","HBLPOWER","PARAS","SOLARIND","ZEN","IDEAFORGE",
-    "GRSE","COCHINSHIP","MAZAGON","GARDENREACH","BEML","RAILTEL","RVNL","IREDA",
-    # Textiles / consumer
-    "PAGEIND","RAYMOND","ARVIND","GOKALDAS","KITEX","RUPA","DOLLAR","LUX",
-    "SAFARI","VMART","TTKPRESTIG","HAWKINCOOK","SYMPHONY","WONDERLA",
-    # Real estate / infra
-    "KOLTEPATIL","SUNTECK","KEYSTONE","MAHLIFE","HEMIPROP","CAPACITE","KNR",
-    "HGINFRA","PNCINFRA","ASHOKA","DILIPBUILDCON","GAWARCON","JTLINFRA",
-    # Healthcare / diagnostics  
-    "KRSNAA","MEDPLUS","SUVEN","NEULANDLAB","SOLARA","SEQUENT","WOCKHARDT",
-    "JBCHEPHARM","CAPLIN","GRANULES","GLENMARK","ALEMBICLTD","IPCA","NATCOPHARM",
-    # Logistics / supply chain
-    "DELHIVERY","ALLCARGO","TCIEXP","MAHLOG","VRL","SNOWMAN","BLUEDART",
-    # Hotels / travel / leisure  
-    "INDHOTEL","EIHOTEL","LEMONTREE","CHALET","MAHINDRAHOLIDAY","THOMASCOOK",
-    "IRCTC","EASEMYTRIP","IXIGO","RATEGAIN",
-    # Agri / food processing
-    "KRBL","AVANTIFEED","WATERBASE","APEX","RUCHI","USHAMART","BALRAMCHIN",
-    "DHAMPUR","TRIVENI","RENUKA","PRAJIND",
-    # Paints / adhesives / building materials
-    "KANSAINER","ASTRAL","FINOLEX","GREENPANEL","CENTURYPLY","STYLAM","CERA",
-    # Auto ancillary
-    "SANSERA","SUPRAJIT","LUMAX","SUBROS","MINDA","FIEM","GABRIEL","JAMNA",
-    "BOSCHLTD","TIINDIA","MOTHERSON","BALKRISIND","APOLLOTYRE","CEATLTD","MRF",
-    # IT midcaps
-    "SONATASOFT","DATAMATICS","SAKSOFT","APTECH","NIIT","CRISIL","ICRA",
-    "TEAMLEASE","QUESS","CARERATINGS",
+    # Specialty - defence, chemicals, pharma
+    "APCOTEXIND","COROMANDEL","PIIND","CHAMBLFERT","GNFC","RALLIS","DHANUKA","DEEPAKFERT",
+    "JKCEMENT","DALMIACEM","RAMCOCEM","BIRLASOFT","MASTEK","TANLA","ROUTE","CYIENT",
+    "CLEANSCIENCE","FINEORG","ALKYLAMINE","VINATIORG","AARTI","CAPACITE","KNR","HGINFRA",
+    "PNCINFRA","METROPOLIS","LALGPATH","GRANULES","GLENMARK","JBCHEPHARM","MIDHANI",
+    "SENCO","KALYAN","ENDURANCE","MOTILALOSW","AAVAS","POLICYBZR","PAYTM",
 ]))
 
 # ── SECTOR MAP ─────────────────────────────────────────────────────────────
@@ -379,9 +346,9 @@ def _do_scan():
         now=datetime.now(IST); print(f"\n[SCAN] {now.strftime('%I:%M %p IST')}")
         regime=fetch_nifty_regime()
         results=[]; errors=0
-        with ThreadPoolExecutor(max_workers=20) as ex:
+        with ThreadPoolExecutor(max_workers=15) as ex:
             futures={ex.submit(fetch_one,sym,regime):sym for sym in WATCHLIST}
-            for f in as_completed(futures,timeout=110):
+            for f in as_completed(futures,timeout=90):
                 try:
                     r=f.result(timeout=8)
                     if r: results.append(r)
@@ -794,7 +761,7 @@ def health():
 
 @app.route("/scan")
 @require_auth
-def scan(): return job_response("scan", _do_scan, max_wait=30)
+def scan(): return job_response("scan", _do_scan, max_wait=0)
 
 @app.route("/refresh")
 @require_auth
