@@ -258,7 +258,7 @@ def compute_indicators(df):
         r["bb_pct"]=round(sf(bb.bollinger_pband().iloc[-1],0.5),3)
         try:
             hl2=(high+low)/2; atr_i=ta.volatility.AverageTrueRange(high=high,low=low,close=close,window=10).average_true_range()
-            upper=(hl2+3.0*atr_i).fillna(method="ffill"); lower=(hl2-3.0*atr_i).fillna(method="ffill")
+            upper=(hl2+3.0*atr_i).ffill(); lower=(hl2-3.0*atr_i).ffill()
             st=pd.Series(float("nan"),index=close.index); st.iloc[10]=float(upper.iloc[10]); bullish=True
             for i in range(11,len(close)):
                 prev=st.iloc[i-1]
@@ -824,8 +824,9 @@ def indices():
 def analyse(symbol):
     try:
         sym=symbol.upper().strip(); yf=get_yf()
-        intra=yf.Ticker(get_ns(sym)).history(period="1d",interval="5m",auto_adjust=True)
-        daily=yf.Ticker(get_ns(sym)).history(period="60d",interval="1d",auto_adjust=True)
+        ticker=yf.Ticker(get_ns(sym))
+        intra=ticker.history(period="1d",interval="5m",auto_adjust=True)
+        daily=ticker.history(period="60d",interval="1d",auto_adjust=True)
         df=intra if (intra is not None and len(intra)>=15) else daily
         ind=compute_indicators(df)
         if not ind: return jsonify({"status":"error","message":f"No data for {sym}"}),404
@@ -873,7 +874,10 @@ def analyse(symbol):
             "bearish_reasons":[s for s in all_sigs if "✗" in s][:4],
         }))
     except Exception as e:
-        print(f"[ANALYSE ERR] {e}"); return jsonify({"status":"error","message":str(e)}),500
+        import traceback
+        print(f"[ANALYSE ERR] {sym if 'sym' in dir() else '?'}: {e}")
+        print(traceback.format_exc())
+        return jsonify({"status":"error","message":str(e)}),500
 
 @app.route("/lt-scan")
 @require_auth
