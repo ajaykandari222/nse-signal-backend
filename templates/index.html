@@ -396,8 +396,8 @@ async function runScan(){
   try{
     fetchIndices();
     sp(25,"Polling for scan results…");
-    addLog("[SCAN] Polling — returns instantly if cached, starts scan if not…");
-    const sd=await poll(`${BACKEND}/scan`,120);
+    addLog("[SCAN] Polling — returns instantly if cached. First scan takes 60-90s on Render free tier…");
+    const sd=await poll(`${BACKEND}/scan`,150);
     sp(85,"Rendering…");
     addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time}`);
     sd.top10.forEach((s,i)=>addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | Score:${s.score}/17`));
