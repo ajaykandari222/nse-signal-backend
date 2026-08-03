@@ -263,19 +263,34 @@ const U="var(--up)",D="var(--dn)",A="var(--amb)",P="var(--pur)",AC="var(--acc2)"
 setInterval(()=>{const t=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));const p=n=>String(n).padStart(2,"0");const el=document.getElementById("clock");if(el)el.textContent=`${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())} IST`;},1000);
 
 // POLL
-async function poll(url,maxWait=120){
+async function poll(url,maxWait=240,onWait){
   const t0=Date.now();
+  let attempts=0;
   while(Date.now()-t0<maxWait*1000){
     try{
       const r=await fetch(url,{credentials:"include"});
-      if(r.status===202){await wait(5000);continue;}
+      if(r.status===202){
+        attempts++;
+        if(onWait) onWait(attempts);
+        await wait(5000);continue;
+      }
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
       const d=await r.json();
-      if(d.status==="scanning"||d.status==="running"){await wait(5000);continue;}
+      // Return partial results immediately — don't wait for full scan
+      if(d.top10&&d.top10.length>0) return d;
+      if(d.top15&&d.top15.length>0) return d;
+      if(d.status==="scanning"||d.status==="running"){
+        attempts++;
+        if(onWait) onWait(attempts);
+        await wait(5000);continue;
+      }
       return d;
-    }catch(e){if(e.message?.startsWith("HTTP"))throw e;await wait(5000);}
+    }catch(e){
+      if(e.message?.startsWith("HTTP"))throw e;
+      await wait(5000);
+    }
   }
-  throw new Error("Taking too long — please retry in 30 seconds");
+  throw new Error("Scan is taking longer than expected on this server. Please retry — results may be cached now.");
 }
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
@@ -397,7 +412,7 @@ async function runScan(){
     fetchIndices();
     sp(25,"Polling for scan results…");
     addLog("[SCAN] Polling — returns instantly if cached. First scan takes 60-90s on Render free tier…");
-    const sd=await poll(`${BACKEND}/scan`,180);
+    const sd=await poll(`${BACKEND}/scan`,240);
     sp(85,"Rendering…");
     addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time}`);
     sd.top10.forEach((s,i)=>addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | Score:${s.score}/17`));
@@ -409,7 +424,7 @@ async function runScan(){
     document.getElementById("sumNifty").style.color=rc3;
     document.getElementById("sumTime").textContent=sd.scan_time;
     document.getElementById("summary").style.display="grid";
-    document.getElementById("scanSub").textContent=`${sd.scanned} stocks · ${sd.scan_time} · score /17 · cached 5 min`;
+    const partial=sd.partial?" · scanning more in background...":"";document.getElementById("scanSub").textContent=`${sd.scanned}/${sd.total||sd.scanned} stocks scanned · ${sd.scan_time} · score /17${partial}`;
     renderPicks();sp(100,"Complete");
     addLog("[✓] Done — expand any card for target price + all indicators");
     btn.innerHTML="↺  Refresh Scan";
@@ -478,10 +493,10 @@ async function runLtScan(){
   ltLogs=[];ltStocks=[];document.getElementById("ltPicks").innerHTML="";
   document.getElementById("ltProgWrap").style.display="block";ltSp(0,"");
   ltAddLog("[START] Long-Term Value Screener");
-  ltAddLog("[SCAN] Polling — first run takes 2-3 min, after that instant…");
+  ltAddLog("[SCAN] Polling — shows first results after ~90s, improves as more stocks are scanned in background…");
   ltSp(15,"Fetching fundamental data…");
   try{
-    const sd=await poll(`${BACKEND}/lt-scan`,210);
+    const sd=await poll(`${BACKEND}/lt-scan`,600);
     ltSp(85,"Rendering…");
     ltAddLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks analysed`);
     sd.top15.forEach((f,i)=>ltAddLog(`[#${i+1}] ${f.symbol}: P/E:${f.pe||"—"} ROE:${f.roe||"—"}% Score:${f.score}/17 (${f.grade})`));
@@ -493,7 +508,7 @@ async function runLtScan(){
     document.getElementById("ltSumPeg").textContent=avgPeg;
     document.getElementById("ltSumTime").textContent=sd.scan_time;
     document.getElementById("ltSummary").style.display="grid";
-    document.getElementById("ltScanSub").textContent=`${sd.scanned} stocks · ${sd.scan_time} · score /17`;
+    const ltPartial=sd.partial?" · scanning more stocks in background...":"";document.getElementById("ltScanSub").textContent=`${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time} · score /17${ltPartial}`;
     renderLtPicks();ltSp(100,"Complete");
     ltAddLog("[✓] Done — expand any card for full fundamental breakdown");
     btn.innerHTML="↺ Refresh Value Scan";
