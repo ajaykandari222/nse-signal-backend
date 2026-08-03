@@ -383,32 +383,79 @@ def fetch_one(sym, regime):
 
 # ── SHORT-TERM SCAN ────────────────────────────────────────────────────────
 def _do_scan():
+    """
+    Incremental batch scanner — scans in batches of 50, stores partial results
+    as each batch completes. Frontend gets results after first batch (~25s).
+    Full scan of 317 stocks completes in background over 2-3 minutes.
+    """
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        now=datetime.now(IST); print(f"\n[SCAN] {now.strftime('%I:%M %p IST')}")
-        regime=fetch_nifty_regime()
-        results=[]; errors=0
-        with ThreadPoolExecutor(max_workers=15) as ex:
-            futures={ex.submit(fetch_one,sym,regime):sym for sym in WATCHLIST}
-            for f in as_completed(futures,timeout=110):
-                try:
-                    r=f.result(timeout=8)
-                    if r: results.append(r)
-                    else: errors+=1
-                except: errors+=1
-        results.sort(key=lambda x:x["score"],reverse=True)
-        set_job_done("scan", sanitise({
-            "status":"success","scan_time":now.strftime("%I:%M %p IST"),
-            "date":now.strftime("%d %b %Y"),"scanned":len(results),
-            "total":len(WATCHLIST),"errors":errors,"top10":results[:10],
-            "cached":True,"market_regime":regime,
-            "nifty_change":regime.get("change_pct",0),"nifty_trend":regime.get("trend","NEUTRAL"),
-        }))
-        # Store regime for other routes
-        with _jobs_lock: _jobs["regime"] = {"result":regime}
-        print(f"[SCAN] Done — {len(results)} valid, {errors} errors")
+        now = datetime.now(IST)
+        print(f"\n[SCAN] {now.strftime('%I:%M %p IST')} — {len(WATCHLIST)} stocks (incremental)")
+
+        # Fetch NIFTY regime first
+        regime = fetch_nifty_regime()
+        print(f"[REGIME] {regime.get('trend')} ({regime.get('change_pct')}%)")
+        with _jobs_lock:
+            _jobs["regime"] = {"result": regime}
+
+        all_results = []
+        total_errors = 0
+        batch_size = 50  # Process 50 stocks at a time
+
+        for batch_num, batch_start in enumerate(range(0, len(WATCHLIST), batch_size)):
+            batch = WATCHLIST[batch_start:batch_start + batch_size]
+            batch_results = []
+            errors = 0
+
+            with ThreadPoolExecutor(max_workers=12) as ex:
+                futures = {ex.submit(fetch_one, sym, regime): sym for sym in batch}
+                for f in as_completed(futures, timeout=60):
+                    try:
+                        r = f.result(timeout=7)
+                        if r: batch_results.append(r)
+                        else: errors += 1
+                    except: errors += 1
+
+            all_results.extend(batch_results)
+            total_errors += errors
+            all_results.sort(key=lambda x: x["score"], reverse=True)
+
+            print(f"[SCAN] Batch {batch_num+1}: {len(batch_results)}/{len(batch)} valid, total so far: {len(all_results)}")
+
+            # Store partial results after FIRST batch — frontend can show these immediately
+            with _jobs_lock:
+                _jobs["scan"] = _jobs.get("scan", {})
+                _jobs["scan"]["result"] = sanitise({
+                    "status":        "success",
+                    "scan_time":     now.strftime("%I:%M %p IST"),
+                    "date":          now.strftime("%d %b %Y"),
+                    "scanned":       len(all_results),
+                    "total":         len(WATCHLIST),
+                    "errors":        total_errors,
+                    "top10":         all_results[:10],
+                    "cached":        True,
+                    "partial":       batch_start + batch_size < len(WATCHLIST),
+                    "market_regime": regime,
+                    "nifty_change":  regime.get("change_pct", 0),
+                    "nifty_trend":   regime.get("trend", "NEUTRAL"),
+                })
+                _jobs["scan"]["running"] = batch_start + batch_size < len(WATCHLIST)
+
+        # Final result — mark complete
+        with _jobs_lock:
+            _jobs["scan"]["result"]["partial"] = False
+            _jobs["scan"]["result"]["scanned"] = len(all_results)
+            _jobs["scan"]["running"] = False
+            _jobs["scan"]["last_run"] = now
+            _jobs["scan"]["scan_count"] = _jobs["scan"].get("scan_count", 0) + 1
+
+        print(f"[SCAN] Complete — {len(all_results)} valid, {total_errors} errors")
+
     except Exception as e:
-        print(f"[SCAN ERR] {e}"); set_job_error("scan",e)
+        print(f"[SCAN ERR] {e}")
+        set_job_error("scan", e)
+
 
 def _scheduler():
     time.sleep(8)
@@ -510,27 +557,66 @@ def score_fundamentals(f):
 
 # ── LT SCAN ───────────────────────────────────────────────────────────────
 def _do_lt_scan():
+    """
+    Incremental fundamental scanner — scans in batches of 40.
+    Stores partial results after each batch. Covers full watchlist (300+ stocks).
+    No timeout errors — returns partial results progressively.
+    """
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
-        now=datetime.now(IST); print(f"[LT] Starting"); lt_list=WATCHLIST[:80]
-        results=[]
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            futures={ex.submit(fetch_fundamentals,sym):sym for sym in lt_list}
-            for f in as_completed(futures,timeout=200):
-                try:
-                    r=f.result(timeout=12)
-                    if r and (r.get("pe") or r.get("roe")):
-                        score,sigs=score_fundamentals(r)
-                        grade="A+" if score>=11 else "A" if score>=8.5 else "B" if score>=6 else "C" if score>=3.5 else "D"
-                        r["score"]=score; r["signals"]=sigs; r["grade"]=grade
-                        results.append(sanitise(r))
-                except: pass
-        results.sort(key=lambda x:x.get("score",0),reverse=True)
-        set_job_done("lt_scan",{"status":"success","scan_time":now.strftime("%I:%M %p IST"),
-            "date":now.strftime("%d %b %Y"),"scanned":len(results),"total":len(lt_list),"top15":results[:15]})
-        print(f"[LT] Done — {len(results)} valid")
+        now = datetime.now(IST)
+        # Scan full watchlist for fundamentals — more stocks = better quality filter
+        lt_list = WATCHLIST  # all 317 stocks
+        print(f"[LT] Starting — {len(lt_list)} stocks in batches of 40")
+
+        all_results = []
+        batch_size = 40
+
+        for batch_num, batch_start in enumerate(range(0, len(lt_list), batch_size)):
+            batch = lt_list[batch_start:batch_start + batch_size]
+
+            with ThreadPoolExecutor(max_workers=6) as ex:
+                futures = {ex.submit(fetch_fundamentals, sym): sym for sym in batch}
+                for f in as_completed(futures, timeout=90):
+                    try:
+                        r = f.result(timeout=15)
+                        if r and (r.get("pe") or r.get("roe")):
+                            score, sigs = score_fundamentals(r)
+                            grade = "A+" if score>=11 else "A" if score>=8.5 else "B" if score>=6 else "C" if score>=3.5 else "D"
+                            r["score"] = score; r["signals"] = sigs; r["grade"] = grade
+                            all_results.append(sanitise(r))
+                    except: pass
+
+            all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
+            scanned_so_far = batch_start + len(batch)
+            print(f"[LT] Batch {batch_num+1}: {len(all_results)} valid so far / {scanned_so_far} scanned")
+
+            # Store partial results after every batch
+            with _jobs_lock:
+                if "lt_scan" not in _jobs: _jobs["lt_scan"] = {}
+                _jobs["lt_scan"]["result"] = {
+                    "status":    "success",
+                    "scan_time": now.strftime("%I:%M %p IST"),
+                    "date":      now.strftime("%d %b %Y"),
+                    "scanned":   scanned_so_far,
+                    "total":     len(lt_list),
+                    "top15":     all_results[:15],
+                    "partial":   scanned_so_far < len(lt_list),
+                }
+                _jobs["lt_scan"]["running"] = scanned_so_far < len(lt_list)
+
+        # Final
+        with _jobs_lock:
+            _jobs["lt_scan"]["result"]["partial"] = False
+            _jobs["lt_scan"]["result"]["scanned"] = len(lt_list)
+            _jobs["lt_scan"]["running"] = False
+            _jobs["lt_scan"]["last_run"] = now
+
+        print(f"[LT] Complete — {len(all_results)} valid stocks found from {len(lt_list)} scanned")
+
     except Exception as e:
-        print(f"[LT ERR] {e}"); set_job_error("lt_scan",e)
+        print(f"[LT ERR] {e}")
+        set_job_error("lt_scan", e)
 
 # ── SECTOR PULSE ──────────────────────────────────────────────────────────
 def _do_sector_pulse():
@@ -803,15 +889,47 @@ def health():
 
 @app.route("/scan")
 @require_auth
-def scan(): return job_response("scan", _do_scan, max_wait=0)
+def scan():
+    """Returns cached results instantly. Starts scan if none cached.
+    Returns partial results after first batch (~25s) — no timeout error."""
+    job = get_job("scan")
+    result = job.get("result")
+
+    # Have results (even partial) — return them immediately
+    if result and result.get("top10"):
+        return jsonify(result)
+
+    # No results yet — start scan if not running
+    running = job.get("running", False)
+    if not running:
+        if set_job_running("scan"):
+            threading.Thread(target=_do_scan, daemon=True).start()
+
+    # Wait up to 35s for first batch to complete
+    for _ in range(35):
+        time.sleep(1)
+        j = get_job("scan")
+        r = j.get("result")
+        if r and r.get("top10"):
+            return jsonify(r)
+
+    # Still no results — tell frontend to keep polling
+    return jsonify({
+        "status": "scanning",
+        "message": "Scan running — first results in ~10 seconds, retry shortly",
+        "top10": []
+    }), 202
 
 @app.route("/refresh")
 @require_auth
 def refresh():
     with _jobs_lock:
-        if "scan" in _jobs: _jobs["scan"]["result"]=None
-    if set_job_running("scan"): threading.Thread(target=_do_scan,daemon=True).start()
-    return jsonify({"status":"started"})
+        if "scan" in _jobs:
+            _jobs["scan"]["result"] = None
+            _jobs["scan"]["running"] = False
+    if set_job_running("scan"):
+        threading.Thread(target=_do_scan, daemon=True).start()
+    return jsonify({"status": "started"})
 
 @app.route("/indices")
 @require_auth
@@ -886,7 +1004,35 @@ def analyse(symbol):
 
 @app.route("/lt-scan")
 @require_auth
-def lt_scan(): return job_response("lt_scan", _do_lt_scan, max_wait=5)
+def lt_scan():
+    """Returns partial results as soon as first batch done (~60s).
+    Full scan of 317 stocks takes 10-15 min — results improve progressively."""
+    job = get_job("lt_scan")
+    result = job.get("result")
+
+    # Have results (even partial) — return them
+    if result and result.get("top15"):
+        return jsonify(result)
+
+    # Start scan if not running
+    running = job.get("running", False)
+    if not running:
+        if set_job_running("lt_scan"):
+            threading.Thread(target=_do_lt_scan, daemon=True).start()
+
+    # Wait up to 90s for first batch
+    for _ in range(90):
+        time.sleep(1)
+        j = get_job("lt_scan")
+        r = j.get("result")
+        if r and r.get("top15"):
+            return jsonify(r)
+
+    return jsonify({
+        "status": "scanning",
+        "message": "Fundamental scan running — first results in ~2 min, retry shortly",
+        "top15": []
+    }), 202
 
 @app.route("/lt-refresh")
 @require_auth
