@@ -411,9 +411,9 @@ def _do_scan():
                     "nifty_trend": regime.get("trend", "NEUTRAL"),
                 })
 
-        with ThreadPoolExecutor(max_workers=20) as ex:
+        with ThreadPoolExecutor(max_workers=30) as ex:
             futures = {ex.submit(fetch_one, sym, regime): sym for sym in WATCHLIST}
-            for f in as_completed(futures, timeout=140):
+            for f in as_completed(futures, timeout=120):
                 try:
                     r = f.result(timeout=8)
                     if r: results.append(r)
@@ -552,7 +552,7 @@ def _do_lt_scan():
             batch = lt_list[batch_start:batch_start + batch_size]
             print(f"[LT] Batch {batch_num+1}: {len(batch)} stocks")
 
-            with ThreadPoolExecutor(max_workers=8) as ex:
+            with ThreadPoolExecutor(max_workers=20) as ex:
                 futures = {ex.submit(fetch_fundamentals, sym): sym for sym in batch}
                 for f in as_completed(futures, timeout=120):
                     try:
@@ -723,32 +723,47 @@ def _do_hot_movers():
         import requests as rq
         now=datetime.now(IST); print(f"[HOT] Starting")
         session=rq.Session()
-        try: session.get("https://www.nseindia.com",headers=NSE_HEADERS,timeout=8)
-        except: pass
-
-        # NSE gainers/losers/active
-        gainers=[]; losers=[]; active=[]; circuits=[]
-        for key,url in [
-            ("gainers","https://www.nseindia.com/api/live-analysis-variations?index=gainers"),
-            ("losers","https://www.nseindia.com/api/live-analysis-variations?index=losers"),
-            ("active","https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume"),
-            ("circuits","https://www.nseindia.com/api/live-analysis-data-for-alerts?index=uppercircuit"),
-        ]:
+        # Prime NSE session with retry
+        for _attempt in range(3):
             try:
-                r=session.get(url,headers=NSE_HEADERS,timeout=8)
+                r0 = session.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=8)
+                if r0.ok: break
+            except: pass
+            time.sleep(1)
+
+        # NSE gainers/losers/active — fetch in parallel
+        gainers=[]; losers=[]; active=[]; circuits=[]
+        nse_endpoints = {
+            "gainers": "https://www.nseindia.com/api/live-analysis-variations?index=gainers",
+            "losers":  "https://www.nseindia.com/api/live-analysis-variations?index=losers",
+            "active":  "https://www.nseindia.com/api/live-analysis-most-active-securities?index=volume",
+            "circuits":"https://www.nseindia.com/api/live-analysis-data-for-alerts?index=uppercircuit",
+        }
+        def fetch_nse_endpoint(key_url):
+            key, url = key_url
+            try:
+                r = session.get(url, headers=NSE_HEADERS, timeout=10)
                 if r.ok:
-                    items=r.json().get("data",[])
-                    cleaned=[{"symbol":i.get("symbol","").strip().upper(),
+                    items = r.json().get("data", [])
+                    return key, [{"symbol":i.get("symbol","").strip().upper(),
                         "ltp":i.get("lastPrice") or i.get("ltp") or 0,
                         "change_pct":i.get("pChange") or i.get("percentChange") or 0,
                         "volume":i.get("totalTradedVolume") or i.get("quantityTraded") or 0,
                         "prev_close":i.get("previousPrice") or i.get("previousClose") or 0,
                     } for i in items[:20] if i.get("symbol")]
+            except: pass
+            return key, []
+        from concurrent.futures import ThreadPoolExecutor as _TPE, as_completed as _ac
+        with _TPE(max_workers=4) as _ex:
+            _futs = {_ex.submit(fetch_nse_endpoint, kv): kv for kv in nse_endpoints.items()}
+            for _f in _ac(_futs, timeout=15):
+                try:
+                    key, cleaned = _f.result(timeout=12)
                     if key=="gainers": gainers=cleaned
                     elif key=="losers": losers=cleaned
                     elif key=="active": active=cleaned
                     elif key=="circuits": circuits=cleaned
-            except: pass
+                except: pass
 
         # Bulk deals
         bulk=[]; block=[]
@@ -811,9 +826,9 @@ def _do_hot_movers():
                     "near_breakout":near_bo,"setup_type":st,"setup_color":sc})
             except: return None
 
-        with ThreadPoolExecutor(max_workers=18) as ex:
-            futures={ex.submit(check_stock,sym):sym for sym in WATCHLIST}
-            for f in as_completed(futures,timeout=80):
+        with ThreadPoolExecutor(max_workers=30) as ex:
+            futures={ex.submit(check_stock,sym):sym for sym in WATCHLIST[:160]}
+            for f in as_completed(futures,timeout=120):
                 try:
                     r=f.result(timeout=8)
                     if r: shockers.append(r)
@@ -920,8 +935,9 @@ def indices():
 def analyse(symbol):
     try:
         sym=symbol.upper().strip(); yf=get_yf()
-        intra=yf.Ticker(get_ns(sym)).history(period="1d",interval="5m",auto_adjust=True)
-        daily=yf.Ticker(get_ns(sym)).history(period="60d",interval="1d",auto_adjust=True)
+        _ticker=yf.Ticker(get_ns(sym))
+        intra=_ticker.history(period="1d",interval="5m",auto_adjust=True)
+        daily=_ticker.history(period="60d",interval="1d",auto_adjust=True)
         df=intra if (intra is not None and len(intra)>=15) else daily
         ind=compute_indicators(df)
         if not ind: return jsonify({"status":"error","message":f"No data for {sym}"}),404
@@ -1009,11 +1025,39 @@ def lt_refresh():
 
 @app.route("/sector-pulse")
 @require_auth
-def sector_pulse(): return job_response("sector_pulse", _do_sector_pulse, max_wait=5)
+def sector_pulse():
+    """Returns cached sector pulse. Waits up to 45s for first result."""
+    job = get_job("sector_pulse")
+    result = job.get("result")
+    if result and result.get("status") == "success":
+        return jsonify(result)
+    if not job.get("running", False):
+        if set_job_running("sector_pulse"):
+            threading.Thread(target=_do_sector_pulse, daemon=True).start()
+    for _ in range(45):
+        time.sleep(1)
+        r = get_job("sector_pulse").get("result")
+        if r and r.get("status") == "success":
+            return jsonify(r)
+    return jsonify({"status":"scanning","message":"Sector pulse running — retry in 10s"}), 202
 
 @app.route("/hot-movers")
 @require_auth
-def hot_movers(): return job_response("hot_movers", _do_hot_movers, max_wait=5)
+def hot_movers():
+    """Returns cached hot movers. Waits up to 60s for first result."""
+    job = get_job("hot_movers")
+    result = job.get("result")
+    if result and result.get("status") == "success":
+        return jsonify(result)
+    if not job.get("running", False):
+        if set_job_running("hot_movers"):
+            threading.Thread(target=_do_hot_movers, daemon=True).start()
+    for _ in range(60):
+        time.sleep(1)
+        r = get_job("hot_movers").get("result")
+        if r and r.get("status") == "success":
+            return jsonify(r)
+    return jsonify({"status":"scanning","message":"Hot movers scan running — retry in 10s"}), 202
 
 @app.route("/hot-refresh")
 @require_auth
