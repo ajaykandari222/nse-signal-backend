@@ -304,34 +304,33 @@ const U="var(--up)",D="var(--dn)",A="var(--amb)",P="var(--pur)",AC="var(--acc2)"
 setInterval(()=>{const t=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));const p=n=>String(n).padStart(2,"0");const el=document.getElementById("clock");if(el)el.textContent=`${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())} IST`;},1000);
 
 // POLL
-async function poll(url,maxWait=240,onWait){
+async function poll(url,maxWait=300,onWait){
+  // polls every 5s, maxWait=300s (5 min) default
+  // Routes are non-blocking so each call returns instantly (202 or result)
   const t0=Date.now();
   let attempts=0;
   while(Date.now()-t0<maxWait*1000){
     try{
       const r=await fetch(url,{credentials:"include"});
-      if(r.status===202){
-        attempts++;
-        if(onWait) onWait(attempts);
-        await wait(5000);continue;
-      }
-      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
       const d=await r.json();
-      // Return partial results immediately — don't wait for full scan
-      if(d.top10&&d.top10.length>0) return d;
-      if(d.top15&&d.top15.length>0) return d;
-      if(d.status==="scanning"||d.status==="running"){
-        attempts++;
-        if(onWait) onWait(attempts);
-        await wait(5000);continue;
-      }
-      return d;
+      // Got partial or full results — return immediately
+      if(d.top10  && d.top10.length>0)  return d;
+      if(d.top15  && d.top15.length>0)  return d;
+      if(d.sectors && d.sectors.length>0) return d;
+      if(d.upper_circuits || d.volume_shockers) return d;
+      // Still scanning — wait 5s and retry
+      attempts++;
+      if(onWait) onWait(attempts);
+      await wait(5000);
     }catch(e){
-      if(e.message?.startsWith("HTTP"))throw e;
+      if(e.message?.startsWith("HTTP")) throw e;
+      attempts++;
       await wait(5000);
     }
   }
-  throw new Error("Scan is taking longer than expected on this server. Please retry — results may be cached now.");
+  // After 5 min, prompt retry rather than hard error
+  throw new Error("Still scanning — please click the button again to get results (they may be cached now).");
 }
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
@@ -452,8 +451,14 @@ async function runScan(){
   try{
     fetchIndices();
     sp(25,"Polling for scan results…");
-    addLog("[SCAN] Polling — returns instantly if cached. First scan takes 60-90s on Render free tier…");
-    const sd=await poll(`${BACKEND}/scan`,240);
+    addLog("[SCAN] Scan started in background — results appear as stocks are processed…");
+    let pollAttempt=0;
+    const sd=await poll(`${BACKEND}/scan`,300,(attempt)=>{
+      pollAttempt=attempt;
+      const elapsed=Math.round(attempt*5);
+      sp(Math.min(20+attempt*3,80),`Scanning ${316} stocks in background… ${elapsed}s elapsed`);
+      addLog(`[POLL] ${elapsed}s — waiting for scan results (attempt ${attempt})…`);
+    });
     sp(85,"Rendering…");
     addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time}`);
     sd.top10.forEach((s,i)=>addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | Score:${s.score}/17`));
@@ -541,7 +546,11 @@ async function runLtScan(){
   ltAddLog("[SCAN] Polling — shows first results after ~90s, improves as more stocks are scanned in background…");
   ltSp(15,"Fetching fundamental data…");
   try{
-    const sd=await poll(`${BACKEND}/lt-scan`,600);
+    const sd=await poll(`${BACKEND}/lt-scan`,600,(attempt)=>{
+      const elapsed=Math.round(attempt*5);
+      ltSp(Math.min(10+attempt*2,80),`Scanning fundamentals… ${elapsed}s elapsed (first results ~90s)`);
+      ltAddLog(`[POLL] ${elapsed}s — waiting for fundamental scan results…`);
+    });
     ltSp(85,"Rendering…");
     ltAddLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks analysed`);
     sd.top15.forEach((f,i)=>ltAddLog(`[#${i+1}] ${f.symbol}: P/E:${f.pe||"—"} ROE:${f.roe||"—"}% Score:${f.score}/17 (${f.grade})`));
@@ -663,7 +672,10 @@ async function runSectorPulse(){
   document.getElementById("sProgWrap").style.display="block";sSp(0,"");
   try{
     sSp(15,"Analysing sector sentiment — polling…");
-    const d=await poll(`${BACKEND}/sector-pulse`,90);
+    const d=await poll(`${BACKEND}/sector-pulse`,120,(attempt)=>{
+      const elapsed=Math.round(attempt*5);
+      sSp(Math.min(15+attempt*5,85),`AI sector analysis running… ${elapsed}s elapsed`);
+    });
     if(d.status==="error")throw new Error(d.message);
     sSp(85,"Rendering…");
     document.getElementById("sGlobalTheme").textContent=d.global_theme||"";
@@ -729,7 +741,10 @@ async function runHotMovers(){
   try{
     hSp(15,"Polling hot movers data…");
     document.getElementById("hotProgLbl").textContent="Fetching circuits + bulk deals + volume breakouts…";
-    const d=await poll(`${BACKEND}/hot-movers`,120);
+    const d=await poll(`${BACKEND}/hot-movers`,180,(attempt)=>{
+      const elapsed=Math.round(attempt*5);
+      hSp(Math.min(15+attempt*4,85),`Fetching NSE data + volume shockers… ${elapsed}s elapsed`);
+    });
     if(d.status==="error")throw new Error(d.message);
     hSp(85,"Rendering…");
     document.getElementById("hotTimestamp").textContent=`${d.date} · ${d.scan_time} · Source: NSE live`;
