@@ -146,6 +146,29 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;m
       <div class="sc"><div class="sl">Market Regime</div><div class="sv" id="sumNifty" style="color:var(--pur);font-size:13px">—</div></div>
       <div class="sc"><div class="sl">Scan Time</div><div class="sv" id="sumTime" style="color:var(--amb);font-size:12px">—</div></div>
     </div>
+
+    <!-- Cache Status Bar -->
+    <div id="cacheStatus" style="display:none;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+        background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div id="cacheIndicator" style="display:flex;align-items:center;gap:6px">
+            <div id="cacheDot" style="width:8px;height:8px;border-radius:50%;background:var(--up);box-shadow:0 0 6px var(--up)"></div>
+            <span id="cacheLabel" style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--up)">LIVE DATA</span>
+          </div>
+          <span id="cacheAge" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></span>
+          <span id="cachePartial" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--amb)"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="nextRefresh" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></span>
+          <button onclick="forceRefresh()" id="refreshBtn"
+            style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;
+            background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:var(--acc2);
+            padding:4px 12px;border-radius:6px;cursor:pointer">↺ Refresh Now</button>
+        </div>
+      </div>
+    </div>
+
     <div id="picks"></div>
     <div class="logw" id="logWrap" style="display:none"><div class="logt">Activity Log</div><div class="logb" id="logBox"></div></div>
     <div class="idle" id="idle"><div class="idle-i">◎</div><p>Press <b style="color:var(--ink)">Run Live Technical Scan</b>. Computes RSI, MACD, Supertrend, ADX, StochRSI, VWAP, EMA and 52W breakout for 350+ NSE stocks. Results cached every 5 min.</p></div>
@@ -174,6 +197,24 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;m
       <div class="sc"><div class="sl">Avg PEG</div><div class="sv" id="ltSumPeg" style="color:var(--up)">—</div></div>
       <div class="sc"><div class="sl">Scan Time</div><div class="sv" id="ltSumTime" style="color:var(--amb);font-size:12px">—</div></div>
     </div>
+    <!-- LT Cache Status -->
+    <div id="ltCacheStatus" style="display:none;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+        background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div id="ltCacheDot" style="width:8px;height:8px;border-radius:50%;background:var(--pur);box-shadow:0 0 6px var(--pur)"></div>
+            <span id="ltCacheLabel" style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--pur)">FUNDAMENTAL DATA</span>
+          </div>
+          <span id="ltCacheAge" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></span>
+          <span id="ltCachePartial" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--amb)"></span>
+        </div>
+        <button onclick="forceLtRefresh()" style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;
+          background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:var(--pur);
+          padding:4px 12px;border-radius:6px;cursor:pointer">↺ Refresh Now</button>
+      </div>
+    </div>
+
     <div id="ltPicks"></div>
     <div class="logw" id="ltLogWrap" style="display:none"><div class="logt">Activity Log</div><div class="logb" id="ltLogBox"></div></div>
     <div class="idle" id="ltIdle"><div class="idle-i">🌱</div><p>Press <b style="color:var(--ink)">Run Long-Term Value Scan</b>. Analyses P/E, PEG, ROE, Debt/Equity, Earnings and Revenue growth, FCF, 52W position and analyst targets.</p></div>
@@ -429,6 +470,10 @@ async function runScan(){
     addLog("[✓] Done — expand any card for target price + all indicators");
     btn.innerHTML="↺  Refresh Scan";
     setTimeout(populateQuickPicks,500);
+
+    // Show cache status
+    showCacheStatus(sd);
+
   }catch(e){
     document.getElementById("errorBox").innerHTML=`<b>Error:</b> ${e.message}`;
     document.getElementById("errorBox").style.display="block";
@@ -512,6 +557,10 @@ async function runLtScan(){
     renderLtPicks();ltSp(100,"Complete");
     ltAddLog("[✓] Done — expand any card for full fundamental breakdown");
     btn.innerHTML="↺ Refresh Value Scan";
+
+    // Show LT cache status
+    showLtCacheStatus(sd);
+
   }catch(e){
     document.getElementById("ltErrorBox").innerHTML=`<b>Error:</b> ${e.message}`;
     document.getElementById("ltErrorBox").style.display="block";
@@ -797,6 +846,168 @@ async function runMFScan(){
 
 // INIT
 fetchIndices();setTimeout(()=>fetchIndices(),30000);
+
+// ═══════════════════════════════════════════════════════
+// CACHE STATUS SYSTEM
+// Shows exactly when data was fetched, how old it is,
+// countdown to next auto-refresh, and force-refresh button
+// ═══════════════════════════════════════════════════════
+
+let _scanTimestamp = null;   // when scan result was captured
+let _ltTimestamp   = null;   // when LT scan result was captured
+let _cacheTimer    = null;   // interval for countdown
+
+function showCacheStatus(sd){
+  _scanTimestamp = new Date();
+  document.getElementById("cacheStatus").style.display = "block";
+  updateCacheDisplay(sd);
+
+  // Start live countdown ticker
+  if(_cacheTimer) clearInterval(_cacheTimer);
+  _cacheTimer = setInterval(()=>updateCacheDisplay(sd), 10000); // every 10s
+}
+
+function updateCacheDisplay(sd){
+  if(!_scanTimestamp) return;
+  const now       = new Date();
+  const ageMs     = now - _scanTimestamp;
+  const ageMins   = Math.floor(ageMs / 60000);
+  const ageSecs   = Math.floor((ageMs % 60000) / 1000);
+
+  // Cache freshness thresholds
+  // Scan auto-refreshes every 5 min in background
+  const STALE_MIN = 5;    // orange after 5 min
+  const OLD_MIN   = 10;   // red after 10 min (backend may have restarted)
+
+  let dotColor, labelColor, labelText, dotGlow;
+  if(ageMins < STALE_MIN){
+    dotColor="#10b981"; labelColor="var(--up)"; dotGlow="var(--up)";
+    labelText = ageMins === 0
+      ? `LIVE — fetched ${ageSecs}s ago`
+      : `FRESH — ${ageMins}m ${ageSecs}s ago`;
+  } else if(ageMins < OLD_MIN){
+    dotColor="#f59e0b"; labelColor="var(--amb)"; dotGlow="var(--amb)";
+    labelText = `CACHED — ${ageMins}m ago (auto-refresh running in background)`;
+  } else {
+    dotColor="#f43f5e"; labelColor="var(--dn)"; dotGlow="var(--dn)";
+    labelText = `STALE — ${ageMins}m ago · click Refresh Now`;
+  }
+
+  const dot   = document.getElementById("cacheDot");
+  const label = document.getElementById("cacheLabel");
+  const age   = document.getElementById("cacheAge");
+  const part  = document.getElementById("cachePartial");
+  const next  = document.getElementById("nextRefresh");
+
+  if(dot)   { dot.style.background = dotColor; dot.style.boxShadow = `0 0 6px ${dotGlow}`; }
+  if(label) { label.style.color = labelColor; label.textContent = labelText; }
+
+  // Scan time from server
+  if(age) age.textContent = sd.scan_time ? `Server scan: ${sd.scan_time}` : "";
+
+  // Partial indicator
+  if(part){
+    if(sd.partial){
+      part.textContent = `⟳ Scanning more stocks in background (${sd.scanned}/${sd.total||317} done)`;
+      part.style.color = "var(--amb)";
+    } else {
+      part.textContent = `✓ ${sd.scanned||sd.total||317} stocks scanned`;
+      part.style.color = "var(--up)";
+    }
+  }
+
+  // Countdown to next auto-refresh (every 5 min)
+  if(next){
+    const nextMs  = (5 * 60 * 1000) - ageMs;
+    if(nextMs > 0){
+      const nextMins = Math.floor(nextMs / 60000);
+      const nextSecs = Math.floor((nextMs % 60000) / 1000);
+      next.textContent = `Next background refresh in ${nextMins}m ${nextSecs}s`;
+    } else {
+      next.textContent = `Background refresh overdue — click Refresh Now`;
+    }
+  }
+}
+
+function showLtCacheStatus(sd){
+  _ltTimestamp = new Date();
+  document.getElementById("ltCacheStatus").style.display = "block";
+  updateLtCacheDisplay(sd);
+  setInterval(()=>updateLtCacheDisplay(sd), 30000); // update every 30s
+}
+
+function updateLtCacheDisplay(sd){
+  if(!_ltTimestamp) return;
+  const ageMs   = new Date() - _ltTimestamp;
+  const ageMins = Math.floor(ageMs / 60000);
+  const ageSecs = Math.floor((ageMs % 60000) / 1000);
+
+  const dot   = document.getElementById("ltCacheDot");
+  const label = document.getElementById("ltCacheLabel");
+  const age   = document.getElementById("ltCacheAge");
+  const part  = document.getElementById("ltCachePartial");
+
+  // LT data is valid for 6 hours (fundamentals don't change intraday)
+  const STALE_HOURS = 6;
+  const ageHours = ageMs / 3600000;
+
+  let dotColor, labelColor, labelText;
+  if(ageHours < 1){
+    dotColor="var(--pur)"; labelColor="var(--pur)";
+    labelText = ageMins === 0
+      ? `FRESH — fetched ${ageSecs}s ago`
+      : `FRESH — ${ageMins}m ${ageSecs}s ago`;
+  } else if(ageHours < STALE_HOURS){
+    dotColor="var(--acc2)"; labelColor="var(--acc2)";
+    labelText = `CACHED — ${Math.floor(ageHours)}h ${ageMins % 60}m ago (fundamentals valid for 6h)`;
+  } else {
+    dotColor="var(--amb)"; labelColor="var(--amb)";
+    labelText = `OUTDATED — ${Math.floor(ageHours)}h old · refresh recommended`;
+  }
+
+  if(dot)  { dot.style.background = dotColor; dot.style.boxShadow = `0 0 6px ${dotColor}`; }
+  if(label){ label.style.color = labelColor; label.textContent = labelText; }
+  if(age)  { age.textContent = sd.scan_time ? `Scanned at ${sd.scan_time}` : ""; }
+  if(part) {
+    if(sd.partial){
+      part.textContent = `⟳ Scanning more stocks (${sd.scanned}/${sd.total||317} done)`;
+      part.style.color = "var(--amb)";
+    } else {
+      part.textContent = `✓ ${sd.scanned||317} stocks analysed for fundamentals`;
+      part.style.color = "var(--up)";
+    }
+  }
+}
+
+async function forceRefresh(){
+  const btn = document.getElementById("refreshBtn");
+  if(btn){ btn.textContent = "⟳ Refreshing…"; btn.disabled = true; }
+  try{
+    await fetch(`${BACKEND}/refresh`, {credentials:"include"});
+    _scanTimestamp = null;
+    // Clear existing results and rerun
+    document.getElementById("cacheStatus").style.display = "none";
+    stocks = [];
+    document.getElementById("picks").innerHTML = "";
+    await wait(2000); // give backend 2s to start
+    await runScan();
+  }catch(e){
+    if(btn){ btn.textContent = "↺ Refresh Now"; btn.disabled = false; }
+  }
+}
+
+async function forceLtRefresh(){
+  try{
+    await fetch(`${BACKEND}/lt-refresh`, {credentials:"include"});
+    _ltTimestamp = null;
+    document.getElementById("ltCacheStatus").style.display = "none";
+    ltStocks = [];
+    document.getElementById("ltPicks").innerHTML = "";
+    await wait(2000);
+    await runLtScan();
+  }catch(e){}
+}
+
 </script>
 </body>
 </html>
