@@ -879,31 +879,24 @@ def health():
 @app.route("/scan")
 @require_auth
 def scan():
-    """Returns cached results instantly if available (even partial).
-    Starts background scan if no results exist yet."""
+    """Non-blocking. Returns instantly — either cached result or 202.
+    Frontend polls every 5s. Scan runs in background thread."""
     job = get_job("scan")
     result = job.get("result")
-
-    # Return any available result immediately (partial or complete)
+    # Have results (partial or complete) — return immediately
     if result and result.get("top10"):
         return jsonify(result)
-
-    # No results yet — start scan if not already running
+    # Start scan if not running
     if not job.get("running", False):
         if set_job_running("scan"):
             threading.Thread(target=_do_scan, daemon=True).start()
-
-    # Wait up to 40s for first partial batch (50 stocks)
-    for _ in range(40):
-        time.sleep(1)
-        r = get_job("scan").get("result")
-        if r and r.get("top10"):
-            return jsonify(r)
-
+    # Return 202 immediately — frontend poll() handles waiting
     return jsonify({
         "status": "scanning",
-        "message": "Scan running — first results in ~10s, retrying…",
-        "top10": []
+        "message": "Scan started — results appear as stocks are processed",
+        "top10": [],
+        "scanned": 0,
+        "total": len(WATCHLIST),
     }), 202
 
 
@@ -990,28 +983,20 @@ def analyse(symbol):
 @app.route("/lt-scan")
 @require_auth
 def lt_scan():
-    """Returns partial LT results as soon as first batch (40 stocks) is done."""
+    """Non-blocking. Returns instantly — either cached result or 202."""
     job = get_job("lt_scan")
     result = job.get("result")
-
     if result and result.get("top15"):
         return jsonify(result)
-
     if not job.get("running", False):
         if set_job_running("lt_scan"):
             threading.Thread(target=_do_lt_scan, daemon=True).start()
-
-    # Wait up to 90s for first batch of 40 stocks
-    for _ in range(90):
-        time.sleep(1)
-        r = get_job("lt_scan").get("result")
-        if r and r.get("top15"):
-            return jsonify(r)
-
     return jsonify({
         "status": "scanning",
-        "message": "Fundamental scan running — first results in ~2 min",
-        "top15": []
+        "message": "Fundamental scan started — first results in ~90 seconds",
+        "top15": [],
+        "scanned": 0,
+        "total": len(WATCHLIST),
     }), 202
 
 
@@ -1026,7 +1011,7 @@ def lt_refresh():
 @app.route("/sector-pulse")
 @require_auth
 def sector_pulse():
-    """Returns cached sector pulse. Waits up to 45s for first result."""
+    """Non-blocking. Returns instantly — either cached result or 202."""
     job = get_job("sector_pulse")
     result = job.get("result")
     if result and result.get("status") == "success":
@@ -1034,17 +1019,12 @@ def sector_pulse():
     if not job.get("running", False):
         if set_job_running("sector_pulse"):
             threading.Thread(target=_do_sector_pulse, daemon=True).start()
-    for _ in range(45):
-        time.sleep(1)
-        r = get_job("sector_pulse").get("result")
-        if r and r.get("status") == "success":
-            return jsonify(r)
-    return jsonify({"status":"scanning","message":"Sector pulse running — retry in 10s"}), 202
+    return jsonify({"status":"scanning","message":"Sector analysis running — results in ~20-30s"}), 202
 
 @app.route("/hot-movers")
 @require_auth
 def hot_movers():
-    """Returns cached hot movers. Waits up to 60s for first result."""
+    """Non-blocking. Returns instantly — either cached result or 202."""
     job = get_job("hot_movers")
     result = job.get("result")
     if result and result.get("status") == "success":
@@ -1052,12 +1032,7 @@ def hot_movers():
     if not job.get("running", False):
         if set_job_running("hot_movers"):
             threading.Thread(target=_do_hot_movers, daemon=True).start()
-    for _ in range(60):
-        time.sleep(1)
-        r = get_job("hot_movers").get("result")
-        if r and r.get("status") == "success":
-            return jsonify(r)
-    return jsonify({"status":"scanning","message":"Hot movers scan running — retry in 10s"}), 202
+    return jsonify({"status":"scanning","message":"Hot movers scan running — results in ~30-60s"}), 202
 
 @app.route("/hot-refresh")
 @require_auth
