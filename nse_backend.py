@@ -47,6 +47,26 @@ def sf(v, d=0.0):
 _jobs = {}
 _jobs_lock = threading.Lock()
 
+# In-memory stock data cache — 4 min TTL, avoids re-fetching same stock
+_stock_cache = {}
+_stock_cache_lock = threading.Lock()
+CACHE_TTL = 240  # seconds
+
+def get_cached_stock(sym):
+    with _stock_cache_lock:
+        e = _stock_cache.get(sym)
+        if e and (time.time() - e["ts"]) < CACHE_TTL:
+            return e["d"]
+    return None
+
+def set_cached_stock(sym, data):
+    with _stock_cache_lock:
+        _stock_cache[sym] = {"d": data, "ts": time.time()}
+
+def clear_stock_cache():
+    with _stock_cache_lock:
+        _stock_cache.clear()
+
 def get_job(name):
     with _jobs_lock:
         return _jobs.get(name, {"result":None,"running":False,"last_run":None,"error":None})
@@ -353,7 +373,7 @@ def score_stock(ind, regime=None):
     if d=="BULLISH":  signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✓")
     elif d=="BEARISH":signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✗")
     else:             signals.append(f"TARGET ₹{ind.get('target_price')} | SL ₹{ind.get('stop_loss')}")
-    return max(0,min(17,round(score,1))), signals
+    return max(0,min(23,round(score,1))), signals
 
 def fetch_nifty_regime():
     try:
@@ -371,14 +391,26 @@ def fetch_nifty_regime():
 
 def fetch_one(sym, regime):
     try:
-        yf=get_yf(); ticker=yf.Ticker(get_ns(sym))
-        intra=ticker.history(period="1d",interval="5m",auto_adjust=True)
-        daily=ticker.history(period="60d",interval="1d",auto_adjust=True)
+        cached=get_cached_stock(sym)
+        if cached:
+            sc,sg2=score_stock(cached.get("_ind",{}),regime)
+            r=dict(cached); r["score"]=sc; r["signals"]=sg2; return sanitise(r)
+        yf=get_yf()
+        for _att in range(3):
+            try:
+                ticker=yf.Ticker(get_ns(sym))
+                intra=ticker.history(period="1d",interval="5m",auto_adjust=True)
+                daily=ticker.history(period="60d",interval="1d",auto_adjust=True)
+                break
+            except Exception as _re:
+                if "429" in str(_re) or "rate" in str(_re).lower(): time.sleep(2**_att)
+                else: raise
         df=intra if (intra is not None and len(intra)>=15) else daily
         ind=compute_indicators(df)
         if not ind: return None
         score,signals=score_stock(ind,regime)
-        return sanitise({"symbol":sym,"score":score,"signals":signals,**ind})
+        res=sanitise({"symbol":sym,"score":score,"signals":signals,**ind})
+        res["_ind"]=ind; set_cached_stock(sym,res); return res
     except: return None
 
 # ── SHORT-TERM SCAN ────────────────────────────────────────────────────────
@@ -437,13 +469,28 @@ def _do_scan():
         set_job_error("scan", e)
 
 
+def _is_market_open():
+    n=datetime.now(IST)
+    if n.weekday()>=5: return False
+    mo=n.replace(hour=9,minute=15,second=0,microsecond=0)
+    mc=n.replace(hour=15,minute=30,second=0,microsecond=0)
+    return mo<=n<=mc
+
 def _scheduler():
-    time.sleep(8)
+    time.sleep(8); _hot_last=0; _sec_last=0
     while True:
         try:
+            now_ts=time.time()
             if set_job_running("scan"): _do_scan()
-        except Exception as e:
-            print(f"[SCHED ERR] {e}"); set_job_error("scan",e)
+            if _is_market_open() and now_ts-_hot_last>1800:
+                if set_job_running("hot_movers"):
+                    threading.Thread(target=_do_hot_movers,daemon=True).start()
+                    _hot_last=now_ts; print("[SCHED] Auto hot movers")
+            if now_ts-_sec_last>7200:
+                if set_job_running("sector_pulse"):
+                    threading.Thread(target=_do_sector_pulse,daemon=True).start()
+                    _sec_last=now_ts; print("[SCHED] Auto sector pulse")
+        except Exception as e: print(f"[SCHED ERR] {e}")
         time.sleep(5*60)
 
 def _keep_alive():
@@ -462,78 +509,134 @@ def fetch_fundamentals(sym):
         cmp=info.get("currentPrice") or info.get("regularMarketPrice")
         if not cmp: return None
         def sg(k,d=None): return info.get(k,d)
+        def pct(k): v=sg(k); return round(v*100,1) if v is not None else None
+        def rnd(k,n=2): v=sg(k); return round(v,n) if v is not None else None
         r={"symbol":sym,"cmp":round(float(cmp),2),"company":sg("longName",sym),"sector":sg("sector","—"),
            "market_cap":sg("marketCap"),
-           "pe":round(sg("trailingPE"),2) if sg("trailingPE") else None,
-           "pb":round(sg("priceToBook"),2) if sg("priceToBook") else None,
-           "roe":round(sg("returnOnEquity")*100,1) if sg("returnOnEquity") else None,
+           "pe":rnd("trailingPE"),"forward_pe":rnd("forwardPE"),"pb":rnd("priceToBook"),
+           "peg_direct":rnd("pegRatio"),"ev_ebitda":rnd("enterpriseToEbitda"),
+           "roe":pct("returnOnEquity"),"roa":pct("returnOnAssets"),
            "debt_equity":round(sg("debtToEquity")/100,2) if sg("debtToEquity") else None,
-           "revenue_growth":round(sg("revenueGrowth")*100,1) if sg("revenueGrowth") else None,
-           "earnings_growth":round(sg("earningsGrowth")*100,1) if sg("earningsGrowth") else None,
+           "current_ratio":rnd("currentRatio"),
+           "gross_margin":pct("grossMargins"),"op_margin":pct("operatingMargins"),
+           "profit_margin":pct("profitMargins"),
+           "earnings_growth":pct("earningsGrowth"),"revenue_growth":pct("revenueGrowth"),
+           "eps_trailing":rnd("trailingEps"),"eps_forward":rnd("forwardEps"),
            "fcf_positive":bool(sg("freeCashflow") and sg("freeCashflow")>0),
+           "fcf":sg("freeCashflow"),"dividend_yield":pct("dividendYield"),
            "week52_high":sg("fiftyTwoWeekHigh"),"week52_low":sg("fiftyTwoWeekLow"),
-           "analyst_target":round(sg("targetMeanPrice"),2) if sg("targetMeanPrice") else None,
-           "num_analysts":sg("numberOfAnalystOpinions",0),
-           "insider_holding":round(sg("heldPercentInsiders")*100,1) if sg("heldPercentInsiders") else None,
-           "profit_margin":round(sg("profitMargins")*100,1) if sg("profitMargins") else None,
-           "op_margin":round(sg("operatingMargins")*100,1) if sg("operatingMargins") else None,
-        }
+           "analyst_target":rnd("targetMeanPrice"),"analyst_high":rnd("targetHighPrice"),
+           "analyst_low":rnd("targetLowPrice"),"num_analysts":sg("numberOfAnalystOpinions",0),
+           "analyst_recommendation":sg("recommendationKey","—"),
+           "insider_holding":pct("heldPercentInsiders"),
+           "institution_holding":pct("heldPercentInstitutions"),
+           "beta":rnd("beta"),"short_ratio":rnd("shortRatio")}
         r["analyst_upside"]=round((r["analyst_target"]-r["cmp"])/r["cmp"]*100,1) if r["analyst_target"] else None
         r["pct_from_52h"]=round((r["cmp"]-r["week52_high"])/r["week52_high"]*100,1) if r["week52_high"] else None
+        r["pct_from_52l"]=round((r["cmp"]-r["week52_low"])/r["week52_low"]*100,1) if r["week52_low"] else None
         pe=r["pe"]; eg=r["earnings_growth"]
-        r["peg"]=round(pe/eg,2) if pe and eg and eg>0 else None
+        r["peg"]=r["peg_direct"] or (round(pe/eg,2) if pe and eg and eg>0 else None)
+        r["promoter_holding"]=r["insider_holding"]
         return sanitise(r)
-    except: return None
+    except Exception as e: print(f"[FUND ERR] {sym}: {e}"); return None
 
 def score_fundamentals(f):
     if not f: return 0,[]
     score=0; signals=[]
     pe=f.get("pe")
     if pe:
-        if 0<pe<=15:  score+=3.0; signals.append(f"P/E {pe} — attractively valued ✓")
-        elif pe<=25:  score+=1.5; signals.append(f"P/E {pe} — fairly valued")
-        elif pe>40:   score-=1.0; signals.append(f"P/E {pe} — expensive ✗")
-        else:         signals.append(f"P/E {pe} — moderate")
+        if 0<pe<=12:   score+=3.0; signals.append(f"P/E {pe} — deep value ✓")
+        elif pe<=20:   score+=2.0; signals.append(f"P/E {pe} — attractively valued ✓")
+        elif pe<=30:   score+=1.0; signals.append(f"P/E {pe} — fairly valued")
+        elif pe>50:    score-=1.5; signals.append(f"P/E {pe} — very expensive ✗")
+        else:          signals.append(f"P/E {pe} — moderate")
     peg=f.get("peg")
     if peg:
-        if 0<peg<=1.0:  score+=2.0; signals.append(f"PEG {peg} — cheap vs growth ✓")
-        elif peg<=1.5:  score+=1.0; signals.append(f"PEG {peg} — fair ✓")
-        elif peg>2.5:   score-=1.0; signals.append(f"PEG {peg} — expensive ✗")
+        if 0<peg<=0.8: score+=3.0; signals.append(f"PEG {peg} — exceptional value vs growth ✓")
+        elif peg<=1.2: score+=2.0; signals.append(f"PEG {peg} — cheap vs growth ✓")
+        elif peg<=1.8: score+=1.0; signals.append(f"PEG {peg} — fair ✓")
+        elif peg>3.0:  score-=1.0; signals.append(f"PEG {peg} — expensive ✗")
+    fpe=f.get("forward_pe")
+    if fpe and pe and fpe<pe: score+=0.5; signals.append(f"Forward P/E {fpe} < trailing — earnings growing ✓")
+    ev=f.get("ev_ebitda")
+    if ev:
+        if ev<10: score+=1.0; signals.append(f"EV/EBITDA {ev} — cheap enterprise ✓")
+        elif ev>30: score-=0.5; signals.append(f"EV/EBITDA {ev} — expensive ✗")
     roe=f.get("roe")
     if roe:
-        if roe>=20:   score+=2.5; signals.append(f"ROE {roe}% — excellent ✓")
-        elif roe>=15: score+=1.5; signals.append(f"ROE {roe}% — good ✓")
-        elif roe<8:   score-=1.0; signals.append(f"ROE {roe}% — weak ✗")
-        else:         signals.append(f"ROE {roe}% — moderate")
+        if roe>=25:  score+=3.0; signals.append(f"ROE {roe}% — exceptional ✓")
+        elif roe>=18:score+=2.0; signals.append(f"ROE {roe}% — excellent ✓")
+        elif roe>=12:score+=1.0; signals.append(f"ROE {roe}% — good ✓")
+        elif roe<8:  score-=1.0; signals.append(f"ROE {roe}% — weak ✗")
+        else:        signals.append(f"ROE {roe}% — moderate")
+    roa=f.get("roa")
+    if roa:
+        if roa>=15: score+=1.0; signals.append(f"ROA {roa}% — highly efficient ✓")
+        elif roa>=8:score+=0.5; signals.append(f"ROA {roa}% — efficient ✓")
     de=f.get("debt_equity")
     if de is not None:
-        if de<=0.3:   score+=2.0; signals.append(f"D/E {de} — very healthy ✓")
-        elif de<=0.6: score+=1.0; signals.append(f"D/E {de} — manageable ✓")
-        elif de>1.5:  score-=1.5; signals.append(f"D/E {de} — high leverage ✗")
-        else:         signals.append(f"D/E {de} — moderate")
+        if de<=0.2:  score+=2.0; signals.append(f"D/E {de} — near debt-free ✓")
+        elif de<=0.5:score+=1.5; signals.append(f"D/E {de} — very healthy ✓")
+        elif de<=1.0:score+=0.5; signals.append(f"D/E {de} — manageable")
+        elif de>2.0: score-=2.0; signals.append(f"D/E {de} — high leverage ✗")
+        else:        score-=0.5; signals.append(f"D/E {de} — elevated ✗")
+    cr=f.get("current_ratio")
+    if cr:
+        if cr>=2.0:  score+=1.0; signals.append(f"Current ratio {cr} — strong liquidity ✓")
+        elif cr>=1.2:score+=0.5; signals.append(f"Current ratio {cr} — adequate ✓")
+        elif cr<1.0: score-=1.0; signals.append(f"Current ratio {cr} — liquidity risk ✗")
+    gm=f.get("gross_margin")
+    if gm:
+        if gm>=40:  score+=1.0; signals.append(f"Gross margin {gm}% — pricing power ✓")
+        elif gm>=25:score+=0.5; signals.append(f"Gross margin {gm}% — healthy ✓")
+        elif gm<10: score-=0.5; signals.append(f"Gross margin {gm}% — thin ✗")
     eg=f.get("earnings_growth")
     if eg is not None:
-        if eg>=25:   score+=2.5; signals.append(f"EPS growth {eg}% — exceptional ✓")
-        elif eg>=15: score+=1.5; signals.append(f"EPS growth {eg}% — strong ✓")
-        elif eg<0:   score-=1.5; signals.append(f"EPS growth {eg}% — declining ✗")
+        if eg>=30:   score+=3.0; signals.append(f"EPS growth {eg}% — exceptional ✓")
+        elif eg>=20: score+=2.0; signals.append(f"EPS growth {eg}% — strong ✓")
+        elif eg>=10: score+=1.0; signals.append(f"EPS growth {eg}% — healthy ✓")
+        elif eg<0:   score-=2.0; signals.append(f"EPS growth {eg}% — declining ✗")
         else:        signals.append(f"EPS growth {eg}% — modest")
     rg=f.get("revenue_growth")
     if rg is not None:
-        if rg>=20:  score+=1.5; signals.append(f"Rev growth {rg}% — rapid ✓")
-        elif rg>=10:score+=0.8; signals.append(f"Rev growth {rg}% — healthy ✓")
-        elif rg<0:  score-=1.0; signals.append(f"Rev growth {rg}% — shrinking ✗")
-    if f.get("fcf_positive"): score+=1.0; signals.append("FCF positive ✓")
-    else:                      score-=0.5; signals.append("FCF negative ✗")
-    p52=f.get("pct_from_52h")
-    if p52 is not None:
-        if -40<=p52<=-15: score+=1.5; signals.append(f"{abs(p52)}% below 52W high — value entry ✓")
-        elif p52>=-5:     signals.append(f"Near 52W high ({p52}%)")
-    upside=f.get("analyst_upside")
-    if upside and f.get("num_analysts",0)>=3:
-        if upside>=25:   score+=1.5; signals.append(f"Analyst upside +{upside}% ✓")
-        elif upside>=10: score+=0.8; signals.append(f"Analyst upside +{upside}% ✓")
-        elif upside<-10: score-=0.5; signals.append(f"Analyst downside {upside}% ✗")
-    return max(0,min(17,round(score,1))),signals
+        if rg>=25:   score+=2.0; signals.append(f"Revenue growth {rg}% — rapid ✓")
+        elif rg>=15: score+=1.5; signals.append(f"Revenue growth {rg}% — strong ✓")
+        elif rg>=8:  score+=0.5; signals.append(f"Revenue growth {rg}% — healthy ✓")
+        elif rg<0:   score-=1.5; signals.append(f"Revenue growth {rg}% — shrinking ✗")
+    et=f.get("eps_trailing"); ef=f.get("eps_forward")
+    if et and ef and et>0:
+        acc=round((ef-et)/abs(et)*100,1)
+        if acc>=20:  score+=1.0; signals.append(f"EPS accelerating +{acc}% forward ✓")
+        elif acc<-15:score-=0.5; signals.append(f"EPS decelerating {acc}% ✗")
+    if f.get("fcf_positive"): score+=1.5; signals.append("Free cash flow positive ✓")
+    else:                      score-=1.0; signals.append("Free cash flow negative ✗")
+    dy=f.get("dividend_yield")
+    if dy and dy>0 and dy>=3: score+=0.5; signals.append(f"Dividend yield {dy}% ✓")
+    p52h=f.get("pct_from_52h")
+    if p52h is not None:
+        if p52h>=-5:    score+=1.0; signals.append(f"Near 52W high ({p52h}%) — momentum ✓")
+        elif p52h<=-30: score+=1.5; signals.append(f"{abs(p52h)}% below 52W high — value entry ✓")
+        else:           signals.append(f"{abs(p52h)}% below 52W high")
+    upside=f.get("analyst_upside"); na=f.get("num_analysts",0); rec=f.get("analyst_recommendation","")
+    if upside and na>=3:
+        if upside>=30:   score+=2.0; signals.append(f"Analyst target +{upside}% ({na} analysts) ✓")
+        elif upside>=15: score+=1.5; signals.append(f"Analyst target +{upside}% ({na} analysts) ✓")
+        elif upside>=5:  score+=0.5; signals.append(f"Analyst target +{upside}% ✓")
+        elif upside<-10: score-=1.0; signals.append(f"Analyst downside {upside}% ✗")
+    if rec in ("strongBuy","buy"):     score+=0.5; signals.append("Analyst consensus: BUY ✓")
+    elif rec in ("sell","strongSell"): score-=0.5; signals.append("Analyst consensus: SELL ✗")
+    ins=f.get("insider_holding")
+    if ins:
+        if ins>=60:  score+=1.0; signals.append(f"Promoter holding {ins}% — high confidence ✓")
+        elif ins>=45:score+=0.5; signals.append(f"Promoter holding {ins}% — healthy ✓")
+        elif ins<25: score-=0.5; signals.append(f"Promoter holding {ins}% — low ✗")
+    inst=f.get("institution_holding")
+    if inst and inst>=15: score+=0.5; signals.append(f"Institutional holding {inst}% — smart money ✓")
+    beta=f.get("beta")
+    if beta:
+        if 0.5<=beta<=1.2: score+=0.5; signals.append(f"Beta {beta} — stable ✓")
+        elif beta>2.0:     score-=0.5; signals.append(f"Beta {beta} — high volatility ✗")
+    return max(0,min(23,round(score,1))),signals
 
 # ── LT SCAN ───────────────────────────────────────────────────────────────
 def _do_lt_scan():
@@ -619,7 +722,11 @@ news_score 1-10. trend: BOOMING/RISING/NEUTRAL/FALLING/AVOID. All {len(sectors_l
                     for item in parsed.get("sectors",[]): sector_ai[item["name"]]=item
             except Exception as ex: print(f"[SECTOR AI] {ex}")
         scan_result=get_job("scan").get("result",{})
-        sym_scores={r["symbol"]:r["score"] for r in scan_result.get("top10",[])}
+        _all=scan_result.get("top10",[])
+        with _jobs_lock:
+            _fr=_jobs.get("scan",{}).get("result",{})
+        if _fr: _all=_fr.get("top10",_all)
+        sym_scores={r["symbol"]:r["score"] for r in _all}
         results=[]
         for sector,stocks_list in SECTOR_STOCKS.items():
             sea_score=SEASONALITY.get(sector,{}).get(month_num,2)
@@ -841,8 +948,23 @@ def _do_hot_movers():
         except:
             upcoming_results = []
 
+        # FII/DII data from NSE
+        fii_dii={"fii_net":None,"dii_net":None,"fii_buy":None,"fii_sell":None,"dii_buy":None,"dii_sell":None}
+        try:
+            fr=session.get("https://www.nseindia.com/api/fiidiiTradeReact",headers=NSE_HEADERS,timeout=10)
+            if fr.ok:
+                fd=fr.json()
+                if isinstance(fd,list) and fd:
+                    lat=fd[0]
+                    fii_dii={"fii_buy":lat.get("fIIBuy"),"fii_sell":lat.get("fIISell"),
+                             "fii_net":lat.get("fIINet"),"dii_buy":lat.get("dIIBuy"),
+                             "dii_sell":lat.get("dIISell"),"dii_net":lat.get("dIINet"),
+                             "date":lat.get("date",now.strftime("%d-%b-%Y"))}
+                    print(f"[FII] net={fii_dii['fii_net']} DII={fii_dii['dii_net']}")
+        except Exception as e: print(f"[FII ERR] {e}")
+
         set_job_done("hot_movers",sanitise({
-            "status":"success","scan_time":now.strftime("%I:%M %p IST"),"date":now.strftime("%d %b %Y, %A"),
+            "status":"success","fii_dii":fii_dii,"scan_time":now.strftime("%I:%M %p IST"),"date":now.strftime("%d %b %Y, %A"),
             "gainers":gainers[:10],"losers":losers[:5],"most_active":active[:8],
             "upper_circuits":circuits[:15],"volume_shockers":shockers[:18],
             "bulk_block_deals":sorted_deals[:12],"raw_bulk":bulk[:12],"raw_block":block[:8],
