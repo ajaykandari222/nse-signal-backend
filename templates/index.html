@@ -95,6 +95,8 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;m
 .pkt{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);}
 .pills{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;margin:10px 0 18px;}
 .scard-body{display:none;}
+.sparkline{display:inline-block;vertical-align:middle;}
+.sparkline svg{display:block;}
 .sinp{flex:1;min-width:200px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;padding:13px 18px;color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:13px;outline:none;transition:all .2s;}
 .sinp:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(99,102,241,.12);}
 .sinp::placeholder{color:var(--ink3);}
@@ -264,7 +266,29 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;m
     <div class="pgw" id="hotProgWrap" style="display:none"><div class="pgl"><span id="hotProgLbl">Scanning…</span><span id="hotProgPct">0%</span></div><div class="pgb"><div class="pgf" id="hotProgFill" style="width:0%;background:linear-gradient(90deg,var(--dn),var(--amb))"></div></div></div>
     <div class="errb" id="hotErrorBox" style="display:none"></div>
     <div id="hotResults" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)"><div id="hotTimestamp" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div><span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);color:var(--dn)">LIVE NSE DATA</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)"><div id="fiidiiBar" style="display:none;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3)">🏦 FII / DII DAILY FLOW</span>
+          <span id="fiiDate" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+          <div class="met" style="border-color:rgba(99,102,241,.2)">
+            <div class="ml">FII Net</div><div class="mv" id="fiiNet" style="font-size:15px">—</div>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">BUY</div><div id="fiiBuy" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--up)">—</div></div>
+              <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">SELL</div><div id="fiiSell" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dn)">—</div></div>
+            </div>
+          </div>
+          <div class="met" style="border-color:rgba(16,185,129,.2)">
+            <div class="ml">DII Net</div><div class="mv" id="diiNet" style="font-size:15px">—</div>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">BUY</div><div id="diiBuy" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--up)">—</div></div>
+              <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">SELL</div><div id="diiSell" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dn)">—</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="hotTimestamp" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div><span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);color:var(--dn)">LIVE NSE DATA</span></div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>🔴</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--dn)">UPPER CIRCUIT STOCKS</span><span id="hotCircuitCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotCircuits" style="display:grid;gap:7px"></div></div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>💥</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--amb)">VOLUME SHOCKERS &amp; 52W BREAKOUTS</span><span id="hotVolCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotVolume" style="display:grid;gap:7px"></div></div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>🏦</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--acc2)">BULK &amp; BLOCK DEALS</span><span id="hotDealCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotDeals" style="display:grid;gap:7px"></div></div>
@@ -415,8 +439,8 @@ function renderCard(s,rank){
   ].join("");
   const hdr=`<div class="ch" onclick="stExp['${s.symbol}']=!stExp['${s.symbol}'];renderPicks()">
     <div style="text-align:center"><div class="rnk" style="color:${rcs[rank-1]||I3}">${rank}</div><div class="grd" style="color:${g.c};background:${g.bg};border:2px solid ${g.c}">${g.g}</div></div>
-    <div><span class="sym">${s.symbol}</span><div class="badges">${bdgs}</div><div class="rb"><div class="rt"><div class="rf" style="width:${Math.min(100,s.rsi||50)}%;background:${rc2}"></div></div><span class="rv" style="color:${rc2}">${s.rsi||"—"}</span></div></div>
-    <div class="pc"><div class="cmp">${fpr(s.cmp)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:${uc};margin-top:1px">${fpct(s.change_pct)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${dc};margin-top:3px">→ ${fpr(s.target_price)} (${s.target_pct>=0?"+":""}${s.target_pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I3};margin-top:2px">H:${fpr(s.high)} L:${fpr(s.low)}</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
+    <div><span class="sym">${s.symbol}</span>${watchlistStar(s.symbol)}<div class="badges">${bdgs}</div><div class="rb"><div class="rt"><div class="rf" style="width:${Math.min(100,s.rsi||50)}%;background:${rc2}"></div></div><span class="rv" style="color:${rc2}">${s.rsi||"—"}</span></div></div>
+    <div class="pc"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div class="cmp">${fpr(s.cmp)}</div>${s.price_history?makeSparkline(s.price_history,52,20):""}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:${uc};margin-top:1px">${fpct(s.change_pct)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${dc};margin-top:3px">→ ${fpr(s.target_price)} (${s.target_pct>=0?"+":""}${s.target_pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I3};margin-top:2px">H:${fpr(s.high)} L:${fpr(s.low)}</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
   </div>`;
   if(!isO)return`<div class="card" style="border-left:3px solid ${uc}">${hdr}</div>`;
   return`<div class="card open" style="border-left:3px solid ${uc}">${hdr}
@@ -705,7 +729,7 @@ function renderVolumeCard(s){
   const cc=s.change_pct>=0?U:D;const sc=s.setup_color||A;const ic=s.is_breakout?"🚀":s.near_breakout?"📈":"💥";
   return`<div class="card" style="border-left:3px solid ${sc};${s.is_breakout?"box-shadow:0 0 16px rgba(16,185,129,.1);":""}"><div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;padding:12px 14px">
     <div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:5px"><span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700">${s.symbol}</span><span class="tag" style="background:${sc}18;border:1px solid ${sc}45;color:${sc};font-weight:800">${ic} ${s.setup_type||s.rel_volume+"x"}</span>${s.rsi?`<span style="font-family:'JetBrains Mono',monospace;font-size:8px;color:${I2}">RSI ${s.rsi}</span>`:""}</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:4px"><div style="width:80px;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden"><div style="height:100%;width:${Math.min(100,(s.rel_volume/10)*100)}%;background:${sc}"></div></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I2}">${s.rel_volume}x vol</span>${s.pct_from_52h!=null?`<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${s.pct_from_52h>=-3?U:I2}">${s.pct_from_52h}% from 52W high</span>`:""}</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px"><div style="width:80px;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden"><div style="height:100%;width:${Math.min(100,(s.rel_volume/10)*100)}%;background:${sc}"></div></div><span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I2}">${s.rel_volume}x vol</span>${s.pct_from_52h!=null?`<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${s.pct_from_52h>=-3?U:I2}">${s.pct_from_52h}% from 52W high</span>`:""}${s.delivery_pct!=null?`<span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${s.delivery_pct>=60?U:s.delivery_pct<=30?D:A};margin-left:4px">${s.delivery_pct}% delv</span>`:""}</div>
     ${s.is_breakout?`<div style="font-size:10px;color:${U};margin-top:5px">✓ Breaking 52W high with volume — high conviction setup</div>`:""}</div>
     <div style="text-align:right"><div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700">₹${fnum(s.ltp)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:${cc}">${s.change_pct>=0?"+":""}${s.change_pct?.toFixed(2)||0}%</div>
     <button onclick="analyseHotStock('${s.symbol}')" class="btn" style="font-size:9px;padding:4px 10px;margin-top:6px;display:block;width:100%;box-shadow:none;background:${sc};border-radius:7px">Analyse →</button></div>
@@ -729,7 +753,13 @@ function renderGainerCard(g){
 function renderResultsCard(r){
   const uc=r.urgency_color||AC;
   return`<div class="card" style="border-left:3px solid ${uc}"><div style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px 14px">
-    <div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700">${r.symbol}</span><span class="tag" style="background:${uc}18;border:1px solid ${uc}40;color:${uc};font-weight:800">📅 ${r.urgency}</span></div><div style="font-size:10px;color:${I2};line-height:1.5">${r.purpose} · ${r.date}</div></div>
+    <div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px"><span style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:700">${r.symbol}</span><span class="tag" style="background:${uc}18;border:1px solid ${uc}40;color:${uc};font-weight:800">📅 ${r.urgency}</span></div><div style="font-size:10px;color:${I2};line-height:1.5">${r.purpose} · ${r.date}</div>
+    ${r.beat_summary&&r.beat_summary!=="—"?`<div style="display:flex;gap:6px;margin-top:4px">
+      <span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:var(--up)">${r.beats}B</span>
+      <span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.25);color:var(--dn)">${r.misses}M</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I3}">last ${r.beats+r.misses}Q</span>
+    </div>`:""}
+    </div>
     <button onclick="analyseHotStock('${r.symbol}')" class="btn" style="font-size:9px;padding:4px 12px;box-shadow:none;background:linear-gradient(135deg,${P},${AC});border-radius:7px">Check Setup →</button>
   </div></div>`;
 }
@@ -748,6 +778,22 @@ async function runHotMovers(){
     if(d.status==="error")throw new Error(d.message);
     hSp(85,"Rendering…");
     document.getElementById("hotTimestamp").textContent=`${d.date} · ${d.scan_time} · Source: NSE live`;
+    // Render FII/DII
+    const fd=d.fii_dii||{};
+    if(fd.fii_net!==null && fd.fii_net!==undefined){
+      document.getElementById("fiidiiBar").style.display="block";
+      const fmtCr=v=>v==null?"—":`₹${Number(Math.abs(v)/10000000).toFixed(0)}Cr`;
+      const fNet=Number(fd.fii_net||0); const dNet=Number(fd.dii_net||0);
+      const fnEl=document.getElementById("fiiNet"); fnEl.textContent=fmtCr(fNet);
+      fnEl.style.color=fNet>=0?"var(--up)":"var(--dn)";
+      const dnEl=document.getElementById("diiNet"); dnEl.textContent=fmtCr(dNet);
+      dnEl.style.color=dNet>=0?"var(--up)":"var(--dn)";
+      document.getElementById("fiiBuy").textContent=fmtCr(fd.fii_buy);
+      document.getElementById("fiiSell").textContent=fmtCr(fd.fii_sell);
+      document.getElementById("diiBuy").textContent=fmtCr(fd.dii_buy);
+      document.getElementById("diiSell").textContent=fmtCr(fd.dii_sell);
+      document.getElementById("fiiDate").textContent=fd.date||"";
+    }
     document.getElementById("hotSub").textContent=`${d.upper_circuits?.length||0} circuits · ${d.volume_shockers?.length||0} volume · ${d.bulk_block_deals?.length||0} deals · ${d.date}`;
     const circ=d.upper_circuits||[];document.getElementById("hotCircuitCount").textContent=circ.length+" stocks";
     document.getElementById("hotCircuits").innerHTML=circ.length?circ.map(s=>renderCircuitCard(s)).join(""):noData("No upper circuit stocks via NSE API — check nseindia.com directly if market is open.");
@@ -857,6 +903,42 @@ async function runMFScan(){
     mfSp(100,"Complete");document.getElementById("mfResults").style.display="block";
   }catch(e){document.getElementById("mfErrorBox").innerHTML=`<b>Error:</b> ${e.message}`;document.getElementById("mfErrorBox").style.display="block";}
   document.getElementById("mfProgWrap").style.display="none";btn.disabled=false;btn.innerHTML="💰 Fetch Top Mutual Funds";
+}
+
+// ── SPARKLINE ────────────────────────────────────────────────
+function makeSparkline(prices, width=60, height=22, color){
+  if(!prices||prices.length<2) return "";
+  const mn=Math.min(...prices), mx=Math.max(...prices);
+  const range=mx-mn||1;
+  const pts=prices.map((p,i)=>{
+    const x=Math.round(i/(prices.length-1)*(width-2))+1;
+    const y=Math.round((1-(p-mn)/range)*(height-2))+1;
+    return `${x},${y}`;
+  }).join(" ");
+  const lastUp=prices[prices.length-1]>=prices[0];
+  const c=color||(lastUp?"var(--up)":"var(--dn)");
+  return `<span class="sparkline"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.5" stroke-linejoin="round"/>
+  </svg></span>`;
+}
+
+// ── PERSONAL WATCHLIST ───────────────────────────────────────
+// Stored in memory for this session (no localStorage in artifacts)
+let _myWatchlist = [];
+
+function toggleWatchlist(sym){
+  const idx=_myWatchlist.indexOf(sym);
+  if(idx>=0) _myWatchlist.splice(idx,1);
+  else _myWatchlist.push(sym);
+  renderPicks(); renderLtPicks();
+}
+
+function isWatched(sym){ return _myWatchlist.includes(sym); }
+
+function watchlistStar(sym){
+  const on=isWatched(sym);
+  return `<span onclick="event.stopPropagation();toggleWatchlist('${sym}')" title="${on?'Remove from watchlist':'Add to watchlist'}"
+    style="cursor:pointer;font-size:13px;margin-left:4px;opacity:${on?1:0.3}">${on?'★':'☆'}</span>`;
 }
 
 // INIT
