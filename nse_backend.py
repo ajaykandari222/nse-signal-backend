@@ -799,7 +799,7 @@ news_score 1-10. trend: BOOMING/RISING/NEUTRAL/FALLING/AVOID. All {len(sectors_l
             tech_avg=round(sum(tech_scores)/len(tech_scores),1) if tech_scores else 0
             tech_syms=[s for s in stocks_list if s in sym_scores][:3]
             news_pts=round(news_score/10*4,1); sea_pts=round((sea_score/3)*3,1)
-            tech_pts=round(min(tech_avg/17*3,3),1) if tech_avg else 1.0
+            tech_pts=round(min(tech_avg/23*3,3),1) if tech_avg else 1.0
             combined=round(news_pts+sea_pts+tech_pts,1)
             boom="🔥 VERY HIGH" if combined>=8 else "⚡ HIGH" if combined>=6.5 else "📈 MODERATE" if combined>=5 else "➡️ NEUTRAL" if combined>=3.5 else "📉 WEAK"
             boom_color="#00e5a0" if combined>=8 else "#3d9bff" if combined>=6.5 else "#f59e0b" if combined>=5 else "#6888a8" if combined>=3.5 else "#ff4d6d"
@@ -1054,10 +1054,22 @@ def _do_hot_movers():
                 fd=fr.json()
                 if isinstance(fd,list) and fd:
                     lat=fd[0]
-                    fii_dii={"fii_buy":lat.get("fIIBuy"),"fii_sell":lat.get("fIISell"),
-                             "fii_net":lat.get("fIINet"),"dii_buy":lat.get("dIIBuy"),
-                             "dii_sell":lat.get("dIISell"),"dii_net":lat.get("dIINet"),
-                             "date":lat.get("date",now.strftime("%d-%b-%Y"))}
+                    print(f"[FII] API keys: {list(lat.keys())[:10]}")
+                    # Handle multiple possible key formats from NSE API
+                    def _fii_get(d, *keys):
+                        for k in keys:
+                            v = d.get(k)
+                            if v is not None: return v
+                        return None
+                    fii_dii={
+                        "fii_buy":  _fii_get(lat,"fIIBuy","buyValue","fiiBuyValue","FII_BUY"),
+                        "fii_sell": _fii_get(lat,"fIISell","sellValue","fiiSellValue","FII_SELL"),
+                        "fii_net":  _fii_get(lat,"fIINet","netValue","fiiNetValue","FII_NET"),
+                        "dii_buy":  _fii_get(lat,"dIIBuy","diiBuyValue","DII_BUY"),
+                        "dii_sell": _fii_get(lat,"dIISell","diiSellValue","DII_SELL"),
+                        "dii_net":  _fii_get(lat,"dIINet","diiNetValue","DII_NET"),
+                        "date":     _fii_get(lat,"date","tradeDate","Date") or now.strftime("%d-%b-%Y"),
+                    }
                     print(f"[FII] net={fii_dii['fii_net']} DII={fii_dii['dii_net']}")
         except Exception as e: print(f"[FII ERR] {e}")
 
