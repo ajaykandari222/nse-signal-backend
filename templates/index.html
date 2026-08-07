@@ -174,7 +174,7 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;m
     <div id="picks"></div>
     <div class="logw" id="logWrap" style="display:none"><div class="logt">Activity Log</div><div class="logb" id="logBox"></div></div>
     <div class="idle" id="idle"><div class="idle-i">◎</div><p>Press <b style="color:var(--ink)">Run Live Technical Scan</b>. Computes RSI, MACD, Supertrend, ADX, StochRSI, VWAP, EMA and 52W breakout for 350+ NSE stocks. Results cached every 5 min.</p></div>
-    <div class="disc"><b style="color:var(--amb)">Data:</b> Yahoo Finance (~15 min delay). Score /17. Realistic win rate 63–70% for 2–3 day trades. Not SEBI-registered advice.</div>
+    <div class="disc"><b style="color:var(--amb)">Data:</b> Yahoo Finance (~15 min delay). Score /23. Realistic win rate 63–70% for 2–3 day trades. Not SEBI-registered advice.</div>
   </div>
 
   <!-- LONG-TERM -->
@@ -266,29 +266,36 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;m
     <div class="pgw" id="hotProgWrap" style="display:none"><div class="pgl"><span id="hotProgLbl">Scanning…</span><span id="hotProgPct">0%</span></div><div class="pgb"><div class="pgf" id="hotProgFill" style="width:0%;background:linear-gradient(90deg,var(--dn),var(--amb))"></div></div></div>
     <div class="errb" id="hotErrorBox" style="display:none"></div>
     <div id="hotResults" style="display:none">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)"><div id="fiidiiBar" style="display:none;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+      <!-- FII/DII Panel -->
+      <div id="fiidiiBar" style="display:none;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
           <span style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3)">🏦 FII / DII DAILY FLOW</span>
           <span id="fiiDate" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
           <div class="met" style="border-color:rgba(99,102,241,.2)">
-            <div class="ml">FII Net</div><div class="mv" id="fiiNet" style="font-size:15px">—</div>
-            <div style="display:flex;gap:8px;margin-top:4px">
+            <div class="ml">FII Net Flow</div>
+            <div class="mv" id="fiiNet" style="font-size:16px">—</div>
+            <div style="display:flex;gap:12px;margin-top:5px">
               <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">BUY</div><div id="fiiBuy" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--up)">—</div></div>
               <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">SELL</div><div id="fiiSell" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dn)">—</div></div>
             </div>
           </div>
           <div class="met" style="border-color:rgba(16,185,129,.2)">
-            <div class="ml">DII Net</div><div class="mv" id="diiNet" style="font-size:15px">—</div>
-            <div style="display:flex;gap:8px;margin-top:4px">
+            <div class="ml">DII Net Flow</div>
+            <div class="mv" id="diiNet" style="font-size:16px">—</div>
+            <div style="display:flex;gap:12px;margin-top:5px">
               <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">BUY</div><div id="diiBuy" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--up)">—</div></div>
               <div><div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)">SELL</div><div id="diiSell" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dn)">—</div></div>
             </div>
           </div>
         </div>
       </div>
-      <div id="hotTimestamp" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div><span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);color:var(--dn)">LIVE NSE DATA</span></div>
+      <!-- Timestamp + Live badge -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+        <div id="hotTimestamp" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div>
+        <span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);color:var(--dn)">LIVE NSE DATA</span>
+      </div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>🔴</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--dn)">UPPER CIRCUIT STOCKS</span><span id="hotCircuitCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotCircuits" style="display:grid;gap:7px"></div></div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>💥</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--amb)">VOLUME SHOCKERS &amp; 52W BREAKOUTS</span><span id="hotVolCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotVolume" style="display:grid;gap:7px"></div></div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>🏦</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--acc2)">BULK &amp; BLOCK DEALS</span><span id="hotDealCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotDeals" style="display:grid;gap:7px"></div></div>
@@ -402,7 +409,7 @@ async function fetchIndices(){
 
 // GRADE
 function gi(score){
-  const g=score>=12?"A+":score>=9?"A":score>=6.5?"B":score>=4?"C":"D";
+  const g=score>=16?"A+":score>=13?"A":score>=9?"B":score>=5?"C":"D";
   const m={"A+":[U,"rgba(16,185,129,.15)"],"A":[U,"rgba(16,185,129,.12)"],"B":[A,"rgba(245,158,11,.12)"],"C":[I3,"rgba(100,116,139,.12)"],"D":[D,"rgba(244,63,94,.12)"]};
   const c=m[g]||[I2,"transparent"];return{g,c:c[0],bg:c[1]};
 }
@@ -431,7 +438,7 @@ function renderCard(s,rank){
   const dc=s.direction==="BULLISH"?U:s.direction==="BEARISH"?D:A;
   const bdgs=[
     `<span class="tag" style="background:${uc}18;border:1px solid ${uc}40;color:${uc}">${s.direction||"NEUTRAL"}</span>`,
-    `<span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">SCORE ${s.score}/17</span>`,
+    `<span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">SCORE ${s.score}/23</span>`,
     s.breakout_setup?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:var(--up2)">🚀 BREAKOUT</span>`:"",
     s.supertrend_bull?`<span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:${P}">ST▲</span>`:"",
     s.macd_bullish?`<span class="tag" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:${AC}">MACD▲</span>`:"",
@@ -485,7 +492,7 @@ async function runScan(){
     });
     sp(85,"Rendering…");
     addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time}`);
-    sd.top10.forEach((s,i)=>addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | Score:${s.score}/17`));
+    sd.top10.forEach((s,i)=>addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | Score:${s.score}/23`));
     stocks=sd.top10;
     const reg=sd.market_regime||{};const rc3=reg.trend==="BULL"?U:reg.trend==="BEAR"?D:A;
     document.getElementById("sumScanned").textContent=`${sd.scanned}/${sd.total||sd.scanned}`;
@@ -494,7 +501,7 @@ async function runScan(){
     document.getElementById("sumNifty").style.color=rc3;
     document.getElementById("sumTime").textContent=sd.scan_time;
     document.getElementById("summary").style.display="grid";
-    const partial=sd.partial?" · scanning more in background...":"";document.getElementById("scanSub").textContent=`${sd.scanned}/${sd.total||sd.scanned} stocks scanned · ${sd.scan_time} · score /17${partial}`;
+    const partial=sd.partial?" · scanning more in background...":"";document.getElementById("scanSub").textContent=`${sd.scanned}/${sd.total||sd.scanned} stocks scanned · ${sd.scan_time} · score /23${partial}`;
     renderPicks();sp(100,"Complete");
     addLog("[✓] Done — expand any card for target price + all indicators");
     btn.innerHTML="↺  Refresh Scan";
@@ -540,14 +547,14 @@ function renderLtCard(f,rank){
   const hdr=`<div class="ch" style="grid-template-columns:50px 1fr 110px" onclick="ltExp['${f.symbol}']=!ltExp['${f.symbol}'];renderLtPicks()">
     <div style="text-align:center"><div style="font-size:20px">${medal}</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${gc};margin-top:3px;font-weight:700">${f.grade}</div></div>
     <div><span class="sym">${f.symbol}</span><div style="font-size:11px;color:${I3};margin-top:1px">${f.company||""} ${f.sector?"· "+f.sector:""}</div><div class="badges">${tags}</div></div>
-    <div class="pc"><div class="cmp">${fpr(f.cmp)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${gc};margin-top:3px;font-weight:700">Score ${f.score}/17</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
+    <div class="pc"><div class="cmp">${fpr(f.cmp)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${gc};margin-top:3px;font-weight:700">Score ${f.score}/23</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
   </div>`;
   if(!isO)return`<div class="card">${hdr}</div>`;
   return`<div class="card open">${hdr}
   <div class="cb">
     <div class="st">Valuation &amp; Quality</div>
     <div class="mg">${met("P/E",f.pe||"—",f.pe&&f.pe<=15?U:"var(--ink)")}${met("PEG",f.peg||"—",f.peg&&f.peg<=1.5?P:"var(--ink)")}${met("P/B",f.pb||"—","var(--ink)")}${met("ROE",f.roe?f.roe+"%":"—",f.roe&&f.roe>=15?AC:"var(--ink)")}${met("D/E",f.debt_equity||"—",f.debt_equity&&f.debt_equity<=0.5?U:f.debt_equity>1.5?D:"var(--ink)")}${met("Profit Margin",f.profit_margin?f.profit_margin+"%":"—","var(--ink)")}${met("EPS Growth",f.earnings_growth?f.earnings_growth+"%":"—",f.earnings_growth&&f.earnings_growth>=15?U:"var(--ink)")}${met("Rev Growth",f.revenue_growth?f.revenue_growth+"%":"—",f.revenue_growth&&f.revenue_growth>=10?U:"var(--ink)")}</div>
-    <div class="mg">${met("FCF",f.fcf_positive?"Positive ✓":"Negative ✗",f.fcf_positive?U:D)}${met("52W High",fpr(f.week52_high),I2)}${met("From 52W High",f.pct_from_52h!=null?f.pct_from_52h+"%":"—",A)}${met("Analyst Target",fpr(f.analyst_target),AC)}${met("Analyst Upside",f.analyst_upside!=null?(f.analyst_upside>=0?"+":"")+f.analyst_upside+"%":"—",f.analyst_upside>=20?U:"var(--ink)")}${met("# Analysts",f.num_analysts||"—",I2)}${met("Insider Hold",f.insider_holding?f.insider_holding+"%":"—",f.insider_holding&&f.insider_holding>=50?U:I2)}${met("Score",f.score+"/17",gc)}</div>
+    <div class="mg">${met("FCF",f.fcf_positive?"Positive ✓":"Negative ✗",f.fcf_positive?U:D)}${met("52W High",fpr(f.week52_high),I2)}${met("From 52W High",f.pct_from_52h!=null?f.pct_from_52h+"%":"—",A)}${met("Analyst Target",fpr(f.analyst_target),AC)}${met("Analyst Upside",f.analyst_upside!=null?(f.analyst_upside>=0?"+":"")+f.analyst_upside+"%":"—",f.analyst_upside>=20?U:"var(--ink)")}${met("# Analysts",f.num_analysts||"—",I2)}${met("Insider Hold",f.insider_holding?f.insider_holding+"%":"—",f.insider_holding&&f.insider_holding>=50?U:I2)}${met("Score",f.score+"/23",gc)}</div>
     <div class="st">Fundamental Signals</div><div class="sigbox">${(f.signals||[]).map(sig).join("")}</div>
     <div class="tvbox"><div class="tvtit">● Research Further</div><div class="tvlinks"><a class="tvl" href="https://www.tradingview.com/symbols/NSE-${f.symbol}/" target="_blank">📊 TradingView ↗</a><a class="tvl" href="https://www.screener.in/company/${f.symbol}/" target="_blank">📋 Screener.in ↗</a><a class="tvl" href="https://www.tradingview.com/chart/?symbol=NSE:${f.symbol}" target="_blank">📈 Chart ↗</a></div></div>
   </div></div>`;
@@ -577,7 +584,7 @@ async function runLtScan(){
     });
     ltSp(85,"Rendering…");
     ltAddLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks analysed`);
-    sd.top15.forEach((f,i)=>ltAddLog(`[#${i+1}] ${f.symbol}: P/E:${f.pe||"—"} ROE:${f.roe||"—"}% Score:${f.score}/17 (${f.grade})`));
+    sd.top15.forEach((f,i)=>ltAddLog(`[#${i+1}] ${f.symbol}: P/E:${f.pe||"—"} ROE:${f.roe||"—"}% Score:${f.score}/23 (${f.grade})`));
     ltStocks=sd.top15;
     const validPegs=sd.top15.filter(f=>f.peg!=null).map(f=>f.peg);
     const avgPeg=validPegs.length?(validPegs.reduce((a,b)=>a+b,0)/validPegs.length).toFixed(2):"—";
@@ -586,7 +593,7 @@ async function runLtScan(){
     document.getElementById("ltSumPeg").textContent=avgPeg;
     document.getElementById("ltSumTime").textContent=sd.scan_time;
     document.getElementById("ltSummary").style.display="grid";
-    const ltPartial=sd.partial?" · scanning more stocks in background...":"";document.getElementById("ltScanSub").textContent=`${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time} · score /17${ltPartial}`;
+    const ltPartial=sd.partial?" · scanning more stocks in background...":"";document.getElementById("ltScanSub").textContent=`${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time} · score /23${ltPartial}`;
     renderLtPicks();ltSp(100,"Complete");
     ltAddLog("[✓] Done — expand any card for full fundamental breakdown");
     btn.innerHTML="↺ Refresh Value Scan";
@@ -621,8 +628,8 @@ async function analyseStock(){
     aSp(90,"Rendering analysis…");
     const vc=d.verdict_color||A;const vi=d.verdict_icon||"●";
     const regC=d.regime==="BULL"?U:d.regime==="BEAR"?D:A;
-    const tc=d.tech_score>=10?U:d.tech_score>=7?AC:d.tech_score>=5?A:D;
-    const fc=d.fund_score>=10?U:d.fund_score>=7?AC:d.fund_score>=5?A:D;
+    const tc=d.tech_score>=14?U:d.tech_score>=10?AC:d.tech_score>=7?A:D;
+    const fc=d.fund_score>=14?U:d.fund_score>=10?AC:d.fund_score>=7?A:D;
     const dc=d.direction==="BULLISH"?U:d.direction==="BEARISH"?D:A;
     document.getElementById("aResult").innerHTML=`
       <div style="border-radius:14px;padding:22px 24px;margin-bottom:16px;text-align:center;background:${vc}0d;border:2px solid ${vc}35">
@@ -632,9 +639,9 @@ async function analyseStock(){
         <div style="font-size:13px;color:var(--ink);max-width:480px;margin:0 auto;line-height:1.75">${d.verdict_summary}</div>
       </div>
       <div class="mg" style="margin-bottom:16px">
-        <div class="met" style="text-align:center"><div class="ml">Technical Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${tc}">${d.tech_score}/17</div></div>
-        <div class="met" style="text-align:center"><div class="ml">Fundamental Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${fc}">${d.fund_score}/17</div></div>
-        <div class="met" style="text-align:center;background:${vc}10;border-color:${vc}30"><div class="ml">Combined Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:${vc}">${d.combined_score}/17</div></div>
+        <div class="met" style="text-align:center"><div class="ml">Technical Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${tc}">${d.tech_score}/23</div></div>
+        <div class="met" style="text-align:center"><div class="ml">Fundamental Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${fc}">${d.fund_score}/23</div></div>
+        <div class="met" style="text-align:center;background:${vc}10;border-color:${vc}30"><div class="ml">Combined Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:${vc}">${d.combined_score}/23</div></div>
         <div class="met" style="text-align:center"><div class="ml">Risk:Reward</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${d.risk_reward>=1.5?U:A}">${d.risk_reward?"1:"+d.risk_reward:"—"}</div></div>
       </div>
       <div class="tbox" style="background:${dc}0d;border:1px solid ${dc}25">
@@ -780,9 +787,17 @@ async function runHotMovers(){
     document.getElementById("hotTimestamp").textContent=`${d.date} · ${d.scan_time} · Source: NSE live`;
     // Render FII/DII
     const fd=d.fii_dii||{};
-    if(fd.fii_net!==null && fd.fii_net!==undefined){
+    // NSE returns numbers as strings sometimes — parse them
+    const parseFii=v=>v==null?"—":v;
+    if(fd.fii_net!==null && fd.fii_net!==undefined && fd.fii_buy!==null){
       document.getElementById("fiidiiBar").style.display="block";
-      const fmtCr=v=>v==null?"—":`₹${Number(Math.abs(v)/10000000).toFixed(0)}Cr`;
+      const fmtCr=v=>{
+        if(v==null||v===""||v===undefined) return "—";
+        const n=parseFloat(String(v).replace(/,/g,""));
+        if(isNaN(n)) return String(v);
+        const cr=n/10000000;
+        return (cr>=0?"＋":"−")+"₹"+Math.abs(cr).toFixed(0)+"Cr";
+      };
       const fNet=Number(fd.fii_net||0); const dNet=Number(fd.dii_net||0);
       const fnEl=document.getElementById("fiiNet"); fnEl.textContent=fmtCr(fNet);
       fnEl.style.color=fNet>=0?"var(--up)":"var(--dn)";
