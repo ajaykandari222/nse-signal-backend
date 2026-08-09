@@ -456,6 +456,16 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
     <div class="sbox" style="border-color:rgba(245,158,11,.25)"><button onclick="runSectorPulse()" id="sectorBtn" class="btn" style="background:linear-gradient(135deg,var(--amb),var(--dn))">🌐 Analyse Sector Pulse</button><div class="btn-sub" id="sectorSub">AI news + seasonal + technical · 15 sectors ranked</div></div>
     <div class="pgw" id="sProgWrap" style="display:none"><div class="pgl"><span id="sProgLbl">Scanning…</span><span id="sProgPct">0%</span></div><div class="pgb"><div class="pgf" id="sProgFill" style="width:0%;background:linear-gradient(90deg,var(--amb),var(--dn))"></div></div></div>
     <div class="errb" id="sErrorBox" style="display:none"></div>
+    <div id="sTimestampRow" style="display:none;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <div id="sDot" style="width:8px;height:8px;border-radius:50%;background:var(--amb);box-shadow:0 0 6px var(--amb)"></div>
+        <div id="sTimestamp" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div>
+      </div>
+      <button onclick="forceSectorRefresh()" id="sectorRefreshBtn"
+        style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;
+        background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:var(--acc2);
+        padding:4px 12px;border-radius:6px;cursor:pointer">↺ Refresh Now</button>
+    </div>
     <div id="sThemes" style="display:none;margin-bottom:14px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="met" style="border-color:rgba(99,102,241,.2)"><div style="font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:var(--acc2);margin-bottom:6px">🌍 Global Theme</div><div id="sGlobalTheme" style="font-size:12px;color:var(--ink);line-height:1.7"></div></div><div class="met" style="border-color:rgba(245,158,11,.2)"><div style="font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:2px;text-transform:uppercase;color:var(--amb);margin-bottom:6px">🇮🇳 India Theme</div><div id="sIndiaTheme" style="font-size:12px;color:var(--ink);line-height:1.7"></div></div></div></div>
     <div id="sSectors"></div>
     <div class="idle" id="sIdle"><div class="idle-i">🌐</div><p>Press <b style="color:var(--ink)">Analyse Sector Pulse</b>. Claude scans global macro trends, India catalysts, and seasonal patterns to rank all 15 NSE sectors by boom conviction.</p></div>
@@ -502,8 +512,18 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
       </div>
       <!-- Timestamp + Live badge -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
-        <div id="hotTimestamp" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div>
-        <span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);color:var(--dn)">LIVE NSE DATA</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div id="hotDot" style="width:8px;height:8px;border-radius:50%;background:var(--pur);box-shadow:0 0 6px var(--pur)"></div>
+          <div id="hotTimestamp" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div>
+          <div id="hotAge" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);color:var(--dn)">LIVE NSE DATA</span>
+          <button onclick="forceHotRefresh()" id="hotRefreshBtn"
+            style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;
+            background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:var(--acc2);
+            padding:4px 12px;border-radius:6px;cursor:pointer">↺ Refresh Now</button>
+        </div>
       </div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>🔴</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--dn)">UPPER CIRCUIT STOCKS</span><span id="hotCircuitCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotCircuits" style="display:grid;gap:7px"></div></div>
       <div style="margin-bottom:18px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span>💥</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:var(--amb)">VOLUME SHOCKERS &amp; 52W BREAKOUTS</span><span id="hotVolCount" style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--ink3)"></span></div><div id="hotVolume" style="display:grid;gap:7px"></div></div>
@@ -1264,6 +1284,7 @@ async function runSectorPulse(){
     });
     if(d.status==="error")throw new Error(d.message);
     sSp(85,"Rendering…");
+    showSectorStatus(d);
     document.getElementById("sGlobalTheme").textContent=d.global_theme||"";
     document.getElementById("sIndiaTheme").textContent=d.india_theme||"";
     document.getElementById("sThemes").style.display="block";
@@ -1339,6 +1360,7 @@ async function runHotMovers(){
     });
     if(d.status==="error")throw new Error(d.message);
     hSp(85,"Rendering…");
+    showHotStatus(d);
     document.getElementById("hotTimestamp").textContent=`${d.date} · ${d.scan_time} · Source: NSE live`;
     // Render FII/DII
     const fd=d.fii_dii||{};
@@ -1600,7 +1622,71 @@ fetchIndices();setTimeout(()=>fetchIndices(),30000);
 
 let _scanTimestamp = null;   // when scan result was captured
 let _ltTimestamp   = null;   // when LT scan result was captured
+let _hotTimestamp  = null;   // when hot movers result was captured
+let _sectorTimestamp = null; // when sector pulse result was captured
 let _cacheTimer    = null;   // interval for countdown
+let _hotTimer      = null;
+let _sectorTimer   = null;
+
+let _hotSd = null, _sectorSd = null; // last server response, for formatting
+
+function updateHotDisplay(){
+  if(!_hotTimestamp) return;
+  const ageMs=new Date()-_hotTimestamp; const ageMins=Math.floor(ageMs/60000); const ageSecs=Math.floor((ageMs%60000)/1000);
+  let dotColor,ageText;
+  if(ageMins<3){dotColor="var(--up)";ageText=ageMins===0?`fetched ${ageSecs}s ago`:`fetched ${ageMins}m ${ageSecs}s ago`;}
+  else if(ageMins<15){dotColor="var(--amb)";ageText=`${ageMins}m ago — cached`;}
+  else{dotColor="var(--dn)";ageText=`${ageMins}m ago — STALE, click Refresh Now`;}
+  const dot=document.getElementById("hotDot"); if(dot){dot.style.background=dotColor;dot.style.boxShadow=`0 0 6px ${dotColor}`;}
+  const lbl=document.getElementById("hotAge"); if(lbl) lbl.textContent="· "+ageText;
+}
+function showHotStatus(sd){
+  _hotTimestamp=new Date(); _hotSd=sd;
+  updateHotDisplay();
+  if(_hotTimer) clearInterval(_hotTimer);
+  _hotTimer=setInterval(updateHotDisplay,10000);
+}
+async function forceHotRefresh(){
+  const btn=document.getElementById("hotRefreshBtn");
+  if(btn){btn.textContent="⟳ Refreshing…";btn.disabled=true;}
+  try{
+    await fetch(`${BACKEND}/hot-refresh`,{credentials:"include"});
+    await wait(1500);
+    await runHotMovers();
+  }finally{
+    if(btn){btn.textContent="↺ Refresh Now";btn.disabled=false;}
+  }
+}
+
+function updateSectorDisplay(){
+  if(!_sectorTimestamp) return;
+  const ageMs=new Date()-_sectorTimestamp; const ageMins=Math.floor(ageMs/60000); const ageSecs=Math.floor((ageMs%60000)/1000);
+  let dotColor,ageText;
+  if(ageMins<10){dotColor="var(--up)";ageText=ageMins===0?`fetched ${ageSecs}s ago`:`fetched ${ageMins}m ${ageSecs}s ago`;}
+  else if(ageMins<60){dotColor="var(--amb)";ageText=`${ageMins}m ago — cached`;}
+  else{dotColor="var(--dn)";ageText=`${Math.floor(ageMins/60)}h ${ageMins%60}m ago — STALE, click Refresh Now`;}
+  const scanInfo=_sectorSd?`Scanned ${_sectorSd.date} · ${_sectorSd.scan_time} `:"";
+  const dot=document.getElementById("sDot"); if(dot){dot.style.background=dotColor;dot.style.boxShadow=`0 0 6px ${dotColor}`;}
+  const lbl=document.getElementById("sTimestamp"); if(lbl) lbl.textContent=scanInfo+"· "+ageText;
+}
+function showSectorStatus(sd){
+  _sectorTimestamp=new Date(); _sectorSd=sd;
+  const row=document.getElementById("sTimestampRow"); if(row) row.style.display="flex";
+  updateSectorDisplay();
+  if(_sectorTimer) clearInterval(_sectorTimer);
+  _sectorTimer=setInterval(updateSectorDisplay,10000);
+}
+async function forceSectorRefresh(){
+  const btn=document.getElementById("sectorRefreshBtn");
+  if(btn){btn.textContent="⟳ Refreshing…";btn.disabled=true;}
+  try{
+    await fetch(`${BACKEND}/sector-refresh`,{credentials:"include"});
+    await wait(1500);
+    await runSectorPulse();
+  }finally{
+    if(btn){btn.textContent="↺ Refresh Now";btn.disabled=false;}
+  }
+}
 
 function showCacheStatus(sd){
   _scanTimestamp = new Date();
