@@ -635,6 +635,15 @@ def fetch_fundamentals(sym):
         pe=r["pe"]; eg=r["earnings_growth"]
         r["peg"]=r["peg_direct"] or (round(pe/eg,2) if pe and eg and eg>0 else None)
         r["promoter_holding"]=r["insider_holding"]
+        # ── Lightweight technical overlay: catch bearish divergence even on fundamentally strong stocks ──
+        try:
+            daily=tk.history(period="3mo",interval="1d",auto_adjust=True)
+            tech=compute_indicators(daily) if daily is not None and len(daily)>=20 else None
+            r["bearish_divergence"]=bool(tech.get("bearish_divergence")) if tech else False
+            r["bullish_divergence"]=bool(tech.get("bullish_divergence")) if tech else False
+            r["rsi"]=tech.get("rsi") if tech else None
+        except Exception:
+            r["bearish_divergence"]=False; r["bullish_divergence"]=False; r["rsi"]=None
         return sanitise(r)
     except Exception as e: print(f"[FUND ERR] {sym}: {e}"); return None
 
@@ -734,16 +743,20 @@ def score_fundamentals(f):
     if beta:
         if 0.5<=beta<=1.2: score+=0.5; signals.append(f"Beta {beta} — stable ✓")
         elif beta>2.0:     score-=0.5; signals.append(f"Beta {beta} — high volatility ✗")
+    if f.get("bearish_divergence"):
+        score-=1.5; signals.append("Bearish RSI divergence — technical exhaustion despite fundamentals ✗")
+    elif f.get("bullish_divergence"):
+        score+=0.5; signals.append("Bullish RSI divergence — technical tailwind aligning ✓")
     return max(0,min(23,round(score,1))),signals
 
 # ── LT SCAN ───────────────────────────────────────────────────────────────
 def _do_lt_scan():
-    """Scans up to 200 stocks for fundamentals in batches of 40.
+    """Scans the full watchlist for fundamentals in batches of 40.
     Saves partial top15 after each batch — frontend shows results progressively."""
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
         now = datetime.now(IST)
-        lt_list = WATCHLIST[:200]  # Top 200 by watchlist priority
+        lt_list = WATCHLIST  # Full watchlist — every stock gets a fundamentals pass, not just the top 200
         print(f"[LT] Starting — {len(lt_list)} stocks")
 
         all_results = []
@@ -755,9 +768,9 @@ def _do_lt_scan():
 
             with ThreadPoolExecutor(max_workers=20) as ex:
                 futures = {ex.submit(fetch_fundamentals, sym): sym for sym in batch}
-                for f in as_completed(futures, timeout=120):
+                for f in as_completed(futures, timeout=150):
                     try:
-                        r = f.result(timeout=15)
+                        r = f.result(timeout=20)
                         if r and (r.get("pe") or r.get("roe")):
                             score, sigs = score_fundamentals(r)
                             grade = ("A+" if score>=11 else "A" if score>=8.5
