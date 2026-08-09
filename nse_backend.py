@@ -50,6 +50,20 @@ _jobs_lock = threading.Lock()
 # In-memory stock data cache — 4 min TTL, avoids re-fetching same stock
 _stock_cache = {}
 _stock_cache_lock = threading.Lock()
+
+# ── WATCHLIST HEALTH TRACKING ────────────────────────────────────────────
+# Tracks symbols that consistently fail to fetch (dead/renamed/invalid tickers)
+# so silent misses like a wrong ticker surface immediately instead of persisting for months.
+_fetch_fail_counts = {}
+_fetch_fail_lock = threading.Lock()
+def _record_fetch_result(sym, ok):
+    with _fetch_fail_lock:
+        if ok: _fetch_fail_counts.pop(sym, None)
+        else: _fetch_fail_counts[sym] = _fetch_fail_counts.get(sym, 0) + 1
+def get_broken_symbols(min_fails=3):
+    with _fetch_fail_lock:
+        return {s: c for s, c in _fetch_fail_counts.items() if c >= min_fails}
+
 CACHE_TTL = 240  # seconds
 
 def get_cached_stock(sym):
@@ -141,7 +155,7 @@ WATCHLIST = list(dict.fromkeys([
     "ADANIENT","ADANIPORTS","LTIM","INDUSINDBK","ITC","VEDL","GRASIM","TATACONSUM",
     "BRITANNIA","BAJAJ-AUTO","TRENT",
     # NIFTY NEXT 50
-    "SIEMENS","ABB","HAVELLS","PIDILITIND","BERGEPAINT","MUTHOOTFIN","CHOLAFIN",
+    "SIEMENS","ENRIN","ABB","HAVELLS","PIDILITIND","BERGEPAINT","MUTHOOTFIN","CHOLAFIN",
     "SBILIFE","HDFCLIFE","ICICIGI","MARICO","COLPAL","DABUR","GODREJCP","SAIL",
     "NMDC","AMBUJACEM","SHREECEM","IRCTC","BEL","HAL","BHEL","IDFCFIRSTB",
     "BANDHANBNK","FEDERALBNK","TORNTPHARM","LUPIN","AUROPHARMA","ZYDUSLIFE","ALKEM",
@@ -170,7 +184,7 @@ WATCHLIST = list(dict.fromkeys([
     "RALLIS","DHANUKA","SUMICHEM","HERANBA","GHCL","APCOTEXIND","AARTIIND",
     "NOCIL","ROSSARI","LXCHEM","SUDARSCHEM","INSECTICID",
     # AUTO & ANCILLARY
-    "MOTHERSON","BOSCHLTD","TIINDIA","ENDURANCE","SANSERA","SUPRAJIT",
+    "MOTHERSON","MSUMI","BOSCHLTD","TIINDIA","ENDURANCE","SANSERA","SUPRAJIT",
     "FIEM","GABRIEL","JAMNA","LUMAX","MINDA","SUBROS","CEATLTD","TVSMOTOR",
     # INFRASTRUCTURE & CAPEX
     "GMRINFRA","CUMMINSIND","ASTRAL","RAILTEL","CAPACITE","KNR","HGINFRA",
@@ -183,7 +197,7 @@ WATCHLIST = list(dict.fromkeys([
     "APLAPOLLO","RATNAMANI","GRAPHITE","HINDCOPPER","NALCO","MOIL","WELCORP",
     # FMCG & CONSUMER
     "RADICO","JUBLFOOD","TTKPRESTIG","HAWKINCOOK","SYMPHONY","WONDERLA",
-    "PAGEIND","RAYMOND","SAFARI","VMART","SENCO","KALYAN","BATAINDIA","MCDOWELL-N",
+    "PAGEIND","RAYMOND","SAFARI","VMART","SENCO","KALYANKJIL","BATAINDIA","MCDOWELL-N",
     # ENERGY & POWER
     "ADANIGREEN","ADANIPOWER","TATAPOWER","TORNTPOWER","NHPC","SJVN","IREDA",
     "RECLTD","PFC","CESC","JPPOWER","RPOWER","INOXWIND","SUZLON",
@@ -302,6 +316,34 @@ def compute_indicators(df):
             r["adx_pos"]=round(sf(adx_i.adx_pos().iloc[-1]),1); r["adx_neg"]=round(sf(adx_i.adx_neg().iloc[-1]),1)
             r["adx_strong"]=bool(r["adx"]>=25); r["adx_bullish"]=bool(r["adx_pos"]>r["adx_neg"])
         except: r["adx"]=0; r["adx_strong"]=False; r["adx_bullish"]=False
+        # ── Reversal / Exhaustion indicators ──
+        try:
+            mfi_i=ta.volume.MFIIndicator(high=high,low=low,close=close,volume=volume,window=14)
+            r["mfi"]=round(sf(mfi_i.money_flow_index().iloc[-1],50),1)
+        except: r["mfi"]=50
+        try:
+            psar_i=ta.trend.PSARIndicator(high=high,low=low,close=close,step=0.02,max_step=0.2)
+            psar_series=psar_i.psar()
+            r["psar"]=round(sf(psar_series.iloc[-1]),2)
+            cur_bull=bool(close.iloc[-1]>psar_series.iloc[-1])
+            prev_bull=bool(close.iloc[-2]>psar_series.iloc[-2])
+            r["psar_bullish"]=cur_bull
+            r["psar_flip_bull"]=bool(cur_bull and not prev_bull)
+            r["psar_flip_bear"]=bool(prev_bull and not cur_bull)
+        except: r["psar"]=None; r["psar_bullish"]=False; r["psar_flip_bull"]=False; r["psar_flip_bear"]=False
+        try:
+            lookback=14
+            if len(close)>=lookback+2:
+                wc=close.iloc[-(lookback+1):-1]; wr=rsi.iloc[-(lookback+1):-1]
+                p_high_idx=wc.idxmax(); p_low_idx=wc.idxmin()
+                p_high=float(wc.max()); p_high_rsi=float(rsi.loc[p_high_idx])
+                p_low=float(wc.min()); p_low_rsi=float(rsi.loc[p_low_idx])
+                cur_price=float(close.iloc[-1]); cur_rsi=float(rsi.iloc[-1])
+                r["bearish_divergence"]=bool(cur_price>=p_high and cur_rsi<p_high_rsi-2)
+                r["bullish_divergence"]=bool(cur_price<=p_low and cur_rsi>p_low_rsi+2)
+            else: r["bearish_divergence"]=False; r["bullish_divergence"]=False
+        except: r["bearish_divergence"]=False; r["bullish_divergence"]=False
+
         r["week52_high"]=round(float(close.max()),2); r["week52_low"]=round(float(close.min()),2)
         r["pct_from_52h"]=round((r["cmp"]-r["week52_high"])/r["week52_high"]*100,1)
         r["near_52w_high"]=bool(r["pct_from_52h"]>=-3.0)
@@ -369,6 +411,16 @@ def score_stock(ind, regime=None):
     bb=ind.get("bb_pct",0.5)
     if 0.2<=bb<=0.7: score+=0.5; signals.append(f"Bollinger {round(bb*100)}% — healthy ✓")
     elif bb>0.9:     score-=0.5; signals.append("Bollinger upper band ✗")
+    # ── Reversal / Exhaustion signals ──
+    if ind.get("bullish_divergence"):   score+=2.5; signals.append("Bullish RSI divergence — reversal building ✓")
+    elif ind.get("bearish_divergence"): score-=2.5; signals.append("Bearish RSI divergence — exhaustion warning ✗")
+    if ind.get("psar_flip_bull"):     score+=1.5; signals.append("Parabolic SAR flipped BULLISH ✓")
+    elif ind.get("psar_flip_bear"):  score-=1.5; signals.append("Parabolic SAR flipped BEARISH ✗")
+    elif ind.get("psar_bullish"):    signals.append("Parabolic SAR — trend intact bullish")
+    else:                            signals.append("Parabolic SAR — trend intact bearish")
+    mfi=ind.get("mfi",50)
+    if mfi<=20:   score+=1.5; signals.append(f"MFI {mfi} — oversold, volume-backed bounce ✓")
+    elif mfi>=80: score-=1.5; signals.append(f"MFI {mfi} — overbought, exhaustion risk ✗")
     d=ind.get("direction","NEUTRAL")
     if d=="BULLISH":  signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✓")
     elif d=="BEARISH":signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✗")
@@ -437,7 +489,8 @@ def fetch_one(sym, regime, prefetched_daily=None):
                 else: raise
         df=intra if (intra is not None and len(intra)>=15) else daily
         ind=compute_indicators(df)
-        if not ind: return None
+        if not ind: _record_fetch_result(sym, False); return None
+        _record_fetch_result(sym, True)
         score,signals=score_stock(ind,regime)
         # Add 14-day price history for sparkline (already have daily data)
         price_hist = []
@@ -447,7 +500,7 @@ def fetch_one(sym, regime, prefetched_daily=None):
         except Exception: pass
         res=sanitise({"symbol":sym,"score":score,"signals":signals,"price_history":price_hist,**ind})
         res["_ind"]=ind; set_cached_stock(sym,res); return res
-    except: return None
+    except: _record_fetch_result(sym, False); return None
 
 # ── SHORT-TERM SCAN ────────────────────────────────────────────────────────
 def _do_scan():
@@ -1105,8 +1158,10 @@ def frontend(): return render_template("index.html")
 def health():
     now=datetime.now(IST)
     jobs_status={name: {"running":get_job(name).get("running"),"has_result":bool(get_job(name).get("result"))} for name in ["scan","lt_scan","sector_pulse","hot_movers"]}
+    broken=get_broken_symbols()
     return jsonify({"status":"running","service":"NSESignal Pro v7","time":now.strftime("%I:%M:%S %p IST"),
-                    "watchlist":len(WATCHLIST),"jobs":jobs_status,"message":"Backend live — non-blocking job queue"})
+                    "watchlist":len(WATCHLIST),"jobs":jobs_status,"message":"Backend live — non-blocking job queue",
+                    "broken_symbols":broken,"broken_symbols_count":len(broken)})
 
 @app.route("/scan")
 @require_auth
@@ -1201,6 +1256,9 @@ def analyse(symbol):
             "rel_volume":ind.get("rel_volume"),"breakout_setup":ind.get("breakout_setup"),
             "pct_from_52h":ind.get("pct_from_52h"),"week52_high":ind.get("week52_high"),
             "week52_low":ind.get("week52_low"),"atr":ind.get("atr"),
+            "mfi":ind.get("mfi"),"psar":ind.get("psar"),"psar_bullish":ind.get("psar_bullish"),
+            "psar_flip_bull":ind.get("psar_flip_bull"),"psar_flip_bear":ind.get("psar_flip_bear"),
+            "bullish_divergence":ind.get("bullish_divergence"),"bearish_divergence":ind.get("bearish_divergence"),
             "price_history":price_hist,
             "pe":fund.get("pe") if fund else None,"peg":fund.get("peg") if fund else None,
             "roe":fund.get("roe") if fund else None,"debt_equity":fund.get("debt_equity") if fund else None,
