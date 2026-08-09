@@ -1386,6 +1386,14 @@ def hot_refresh():
     if set_job_running("hot_movers"): threading.Thread(target=_do_hot_movers,daemon=True).start()
     return jsonify({"status":"started"})
 
+@app.route("/sector-refresh")
+@require_auth
+def sector_refresh():
+    with _jobs_lock:
+        if "sector_pulse" in _jobs: _jobs["sector_pulse"]["result"]=None
+    if set_job_running("sector_pulse"): threading.Thread(target=_do_sector_pulse,daemon=True).start()
+    return jsonify({"status":"started"})
+
 @app.route("/news", methods=["POST"])
 def news(): return jsonify({})
 
