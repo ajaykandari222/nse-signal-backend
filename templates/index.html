@@ -793,6 +793,33 @@ function renderTechDetail(s){
       </div>
     </div>
 
+    <!-- Reversal Radar -->
+    <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">🔄 Reversal Radar</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3)">MFI</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:${s.mfi<=20?U:s.mfi>=80?D:I2}">${s.mfi!=null?s.mfi:"—"}</span>
+        </div>
+        <div style="height:5px;background:linear-gradient(to right,var(--up) 0%,var(--up) 20%,var(--amb) 40%,var(--amb) 60%,var(--dn) 80%,var(--dn) 100%);border-radius:3px;position:relative">
+          <div style="position:absolute;top:50%;left:${Math.min(98,Math.max(1,s.mfi||50))}%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:var(--card);border:2px solid ${s.mfi<=20?U:s.mfi>=80?D:I3}"></div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:5px">${s.mfi<=20?"Oversold — bounce likely":s.mfi>=80?"Overbought — exhaustion risk":"Neutral flow"}</div>
+      </div>
+      <div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);margin-bottom:8px">Parabolic SAR</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;padding:6px;border-radius:7px;background:${(s.psar_flip_bull||s.psar_flip_bear)?(s.psar_flip_bull?"rgba(16,185,129,.15)":"rgba(244,63,94,.15)"):(s.psar_bullish?"rgba(16,185,129,.08)":"rgba(244,63,94,.06)")};border:1px solid ${(s.psar_flip_bull||s.psar_flip_bear)?(s.psar_flip_bull?"rgba(16,185,129,.4)":"rgba(244,63,94,.4)"):"var(--border)"};color:${s.psar_bullish?U:D}">
+          ${s.psar_flip_bull?"⚡ FLIPPED BULL":s.psar_flip_bear?"⚡ FLIPPED BEAR":s.psar_bullish?"TREND ▲ BULL":"TREND ▼ BEAR"}
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:5px">${fpr(s.psar)}</div>
+      </div>
+      <div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);margin-bottom:8px">RSI Divergence</div>
+        ${s.bullish_divergence?`<div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;padding:6px;border-radius:7px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">▲ BULLISH</div>`:s.bearish_divergence?`<div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;padding:6px;border-radius:7px;background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:${D}">▼ BEARISH</div>`:`<div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;padding:6px;border-radius:7px;background:rgba(255,255,255,.03);border:1px solid var(--border);color:${I3}">NONE</div>`}
+        <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:5px">Price vs momentum</div>
+      </div>
+    </div>
+
     <!-- Signals -->
     <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">All Signals</div>
     <div style="border-radius:10px;overflow:hidden;border:1px solid var(--border);margin-bottom:14px">
@@ -822,6 +849,10 @@ function renderCard(s,rank){
     `<span class="tag" style="background:${uc}18;border:1px solid ${uc}40;color:${uc}">${s.direction||"NEUTRAL"}</span>`,
     `<span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">SCORE ${s.score}/23</span>${scoreTrend(s.symbol,s.score)}`,
     s.breakout_setup?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:var(--up2)">🚀 BREAKOUT</span>`:"",
+    s.bullish_divergence?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">🔄 BULL DIV</span>`:"",
+    s.bearish_divergence?`<span class="tag" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:${D}">🔄 BEAR DIV</span>`:"",
+    s.psar_flip_bull?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">⚡ SAR FLIP</span>`:"",
+    s.psar_flip_bear?`<span class="tag" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:${D}">⚡ SAR FLIP</span>`:"",
     s.supertrend_bull?`<span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:${P}">ST▲</span>`:"",
     s.macd_bullish?`<span class="tag" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:${AC}">MACD▲</span>`:"",
     s.rel_volume>=1.5?`<span class="tag" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);color:${CY}">VOL ${s.rel_volume}x</span>`:"",
@@ -1145,7 +1176,9 @@ async function analyseStock(){
       risk_reward:d.risk_reward,price_history:d.price_history,week52_high:d.week52_high,week52_low:d.week52_low,
       rsi:d.rsi,rel_volume:d.rel_volume,supertrend_bull:d.supertrend_bull,above_vwap:d.above_vwap,adx:d.adx,
       stoch_k:d.stoch_rsi_k,stoch_d:d.stoch_rsi_d,stoch_bull:d.stoch_bull,ema20:d.ema20,above_ema20:d.above_ema20,
-      macd_hist:d.macd_hist,macd_bullish:d.macd_bullish,signals:d.tech_signals};
+      macd_hist:d.macd_hist,macd_bullish:d.macd_bullish,signals:d.tech_signals,
+      mfi:d.mfi,psar:d.psar,psar_bullish:d.psar_bullish,psar_flip_bull:d.psar_flip_bull,psar_flip_bear:d.psar_flip_bear,
+      bullish_divergence:d.bullish_divergence,bearish_divergence:d.bearish_divergence};
     document.getElementById("aResult").innerHTML=`
       <div style="border-radius:14px;padding:22px 24px;margin-bottom:16px;text-align:center;background:${vc}0d;border:2px solid ${vc}35">
         <div style="font-size:44px;margin-bottom:8px;color:${vc}">${vi}</div>
