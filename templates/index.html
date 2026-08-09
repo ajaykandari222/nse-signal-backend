@@ -681,35 +681,9 @@ function makeMiniOHLC(prices){
   }).join("")}</div>`;
 }
 
-function renderCard(s,rank){
-  const isO=!!stExp[s.symbol];const g=gi(s.score);
-  const uc=s.change_pct>=0?U:D;const rc2=s.rsi>=70?D:s.rsi>=45?U:A;
-  const rcs=[U,AC,A,I3,"#334155",I3,P,CY,AC,A];
+function renderTechDetail(s){
   const dc=s.direction==="BULLISH"?U:s.direction==="BEARISH"?D:A;
-  const topCls=rank===1?"card-top1":rank===2?"card-top2":rank===3?"card-top3":"";
-  const medal=rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":null;
-  const delay=`animation-delay:${(rank-1)*60}ms`;
-  const secTag=s.sector&&s.sector!=="—"?`<span class="sector-tag">${s.sector.split(" ")[0].substr(0,7).toUpperCase()}</span>`:"";
-  const bdgs=[
-    `<span class="tag" style="background:${uc}18;border:1px solid ${uc}40;color:${uc}">${s.direction||"NEUTRAL"}</span>`,
-    `<span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">SCORE ${s.score}/23</span>${scoreTrend(s.symbol,s.score)}`,
-    s.breakout_setup?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:var(--up2)">🚀 BREAKOUT</span>`:"",
-    s.supertrend_bull?`<span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:${P}">ST▲</span>`:"",
-    s.macd_bullish?`<span class="tag" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:${AC}">MACD▲</span>`:"",
-    s.rel_volume>=1.5?`<span class="tag" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);color:${CY}">VOL ${s.rel_volume}x</span>`:"",
-  ].join("");
-  const hdr=`<div class="ch" onclick="stExp['${s.symbol}']=!stExp['${s.symbol}'];renderPicks()">
-    <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px">
-      ${medal?`<div style="font-size:22px;line-height:1">${medal}</div>`:makeRing(s.score,23,g.c,44)}
-      ${!medal?`<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:${g.c};font-weight:700">${g.g}</div>`:""}
-    </div>
-    <div><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap"><span class="sym">${s.symbol}</span>${secTag}${watchlistStar(s.symbol)}</div><div class="badges">${bdgs}</div><div class="rb"><div class="rt"><div class="rf" style="width:${Math.min(100,s.rsi||50)}%;background:${rc2}"></div></div><span class="rv" style="color:${rc2}">${s.rsi||"—"}</span></div></div>
-    <div class="pc"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div class="cmp">${fpr(s.cmp)}</div>${s.price_history?makeMiniOHLC(s.price_history):""}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:${uc};margin-top:1px">${fpct(s.change_pct)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${dc};margin-top:3px">→ ${fpr(s.target_price)} (${s.target_pct>=0?"+":""}${s.target_pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I3};margin-top:2px">H:${fpr(s.high)} L:${fpr(s.low)}</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
-  </div>`;
-  if(!isO)return`<div class="card ${topCls} card-enter" style="border-left:3px solid ${uc};${delay}">${hdr}</div>`;
-  return`<div class="card open ${topCls} card-enter" style="border-left:3px solid ${uc};${delay}">${hdr}
-  <div class="cb">
-
+  return `
     <!-- Trade Setup Banner -->
     <div style="border-radius:12px;padding:16px 18px;margin-bottom:16px;background:${dc}0a;border:1px solid ${dc}25;position:relative;overflow:hidden">
       <div style="position:absolute;top:0;right:0;width:50%;height:100%;background:linear-gradient(to left,${dc}05,transparent);pointer-events:none"></div>
@@ -833,8 +807,36 @@ function renderCard(s,rank){
         <a href="https://www.tradingview.com/symbols/NSE-${s.symbol}/technicals/" target="_blank" class="tvl">📊 Technicals ↗</a>
         <a href="https://www.screener.in/company/${s.symbol}/" target="_blank" class="tvl" style="background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.3);color:var(--acc2)">📋 Screener ↗</a>
       </div>
+    </div>`;
+}
+function renderCard(s,rank){
+  const isO=!!stExp[s.symbol];const g=gi(s.score);
+  const uc=s.change_pct>=0?U:D;const rc2=s.rsi>=70?D:s.rsi>=45?U:A;
+  const rcs=[U,AC,A,I3,"#334155",I3,P,CY,AC,A];
+  const dc=s.direction==="BULLISH"?U:s.direction==="BEARISH"?D:A;
+  const topCls=rank===1?"card-top1":rank===2?"card-top2":rank===3?"card-top3":"";
+  const medal=rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":null;
+  const delay=`animation-delay:${(rank-1)*60}ms`;
+  const secTag=s.sector&&s.sector!=="—"?`<span class="sector-tag">${s.sector.split(" ")[0].substr(0,7).toUpperCase()}</span>`:"";
+  const bdgs=[
+    `<span class="tag" style="background:${uc}18;border:1px solid ${uc}40;color:${uc}">${s.direction||"NEUTRAL"}</span>`,
+    `<span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">SCORE ${s.score}/23</span>${scoreTrend(s.symbol,s.score)}`,
+    s.breakout_setup?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:var(--up2)">🚀 BREAKOUT</span>`:"",
+    s.supertrend_bull?`<span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.3);color:${P}">ST▲</span>`:"",
+    s.macd_bullish?`<span class="tag" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);color:${AC}">MACD▲</span>`:"",
+    s.rel_volume>=1.5?`<span class="tag" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.3);color:${CY}">VOL ${s.rel_volume}x</span>`:"",
+  ].join("");
+  const hdr=`<div class="ch" onclick="stExp['${s.symbol}']=!stExp['${s.symbol}'];renderPicks()">
+    <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px">
+      ${medal?`<div style="font-size:22px;line-height:1">${medal}</div>`:makeRing(s.score,23,g.c,44)}
+      ${!medal?`<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:${g.c};font-weight:700">${g.g}</div>`:""}
     </div>
-  </div></div>`
+    <div><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap"><span class="sym">${s.symbol}</span>${secTag}${watchlistStar(s.symbol)}</div><div class="badges">${bdgs}</div><div class="rb"><div class="rt"><div class="rf" style="width:${Math.min(100,s.rsi||50)}%;background:${rc2}"></div></div><span class="rv" style="color:${rc2}">${s.rsi||"—"}</span></div></div>
+    <div class="pc"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div class="cmp">${fpr(s.cmp)}</div>${s.price_history?makeMiniOHLC(s.price_history):""}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:${uc};margin-top:1px">${fpct(s.change_pct)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${dc};margin-top:3px">→ ${fpr(s.target_price)} (${s.target_pct>=0?"+":""}${s.target_pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I3};margin-top:2px">H:${fpr(s.high)} L:${fpr(s.low)}</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
+  </div>`;
+  if(!isO)return`<div class="card ${topCls} card-enter" style="border-left:3px solid ${uc};${delay}">${hdr}</div>`;
+  return`<div class="card open ${topCls} card-enter" style="border-left:3px solid ${uc};${delay}">${hdr}
+  <div class="cb">${renderTechDetail(s)}</div></div>`
 }
 function renderPicks(){
   const c=document.getElementById("picks");
@@ -1138,7 +1140,12 @@ async function analyseStock(){
     const regC=d.regime==="BULL"?U:d.regime==="BEAR"?D:A;
     const tc=d.tech_score>=14?U:d.tech_score>=10?AC:d.tech_score>=7?A:D;
     const fc=d.fund_score>=14?U:d.fund_score>=10?AC:d.fund_score>=7?A:D;
-    const dc=d.direction==="BULLISH"?U:d.direction==="BEARISH"?D:A;
+    // build a Short-Term-card-shaped object so the same rich visual block renders identically
+    const techObj={symbol:d.symbol,direction:d.direction,cmp:d.cmp,target_price:d.target_price,stop_loss:d.stop_loss,
+      risk_reward:d.risk_reward,price_history:d.price_history,week52_high:d.week52_high,week52_low:d.week52_low,
+      rsi:d.rsi,rel_volume:d.rel_volume,supertrend_bull:d.supertrend_bull,above_vwap:d.above_vwap,adx:d.adx,
+      stoch_k:d.stoch_rsi_k,stoch_d:d.stoch_rsi_d,stoch_bull:d.stoch_bull,ema20:d.ema20,above_ema20:d.above_ema20,
+      macd_hist:d.macd_hist,macd_bullish:d.macd_bullish,signals:d.tech_signals};
     document.getElementById("aResult").innerHTML=`
       <div style="border-radius:14px;padding:22px 24px;margin-bottom:16px;text-align:center;background:${vc}0d;border:2px solid ${vc}35">
         <div style="font-size:44px;margin-bottom:8px;color:${vc}">${vi}</div>
@@ -1149,21 +1156,15 @@ async function analyseStock(){
       <div class="mg" style="margin-bottom:16px">
         <div class="met" style="text-align:center"><div class="ml">Technical Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${tc}">${d.tech_score}/23</div></div>
         <div class="met" style="text-align:center"><div class="ml">Fundamental Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${fc}">${d.fund_score}/23</div></div>
-        <div class="met" style="text-align:center;background:${vc}10;border-color:${vc}30"><div class="ml">Combined Score</div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:${vc}">${d.combined_score}/23</div></div>
-        <div class="met" style="text-align:center"><div class="ml">Risk:Reward</div><div style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:${d.risk_reward>=1.5?U:A}">${d.risk_reward?"1:"+d.risk_reward:"—"}</div></div>
+        <div class="met" style="text-align:center;background:${vc}10;border-color:${vc}30;grid-column:span 2"><div class="ml">Combined Score (60% Tech + 40% Fund)</div><div style="font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:800;color:${vc}">${d.combined_score}/23</div></div>
       </div>
-      <div class="tbox" style="background:${dc}0d;border:1px solid ${dc}25">
-        <div class="st" style="color:${dc}">⬤ ${d.direction||"NEUTRAL"} — Price Targets</div>
-        <div class="mg">${met("CMP (Live)",fpr(d.cmp),"var(--ink)")}${met("Target",fpr(d.target_price)+(d.target_pct!=null?" ("+(d.target_pct>=0?"+":"")+d.target_pct+"%)":""),dc)}${met("Stop-Loss",fpr(d.stop_loss),D)}${met("ATR",fpr(d.atr),I2)}</div>
-      </div>
+
+      ${renderTechDetail(techObj)}
+
+      <!-- Fundamentals -->
+      <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);margin:18px 0 8px">Fundamental Metrics</div>
       <div class="mg2" style="margin-bottom:14px">
         <div class="met" style="padding:14px">
-          <div class="st">Technical Indicators</div>
-          <div class="mg" style="margin-bottom:10px">${met("RSI-14",d.rsi||"—",d.rsi>=45&&d.rsi<=72?U:D)}${met("StochRSI K",d.stoch_rsi_k||"—",d.stoch_rsi_k<80&&d.stoch_rsi_k>d.stoch_rsi_d?P:I2)}${met("MACD",d.macd_hist?.toFixed(3)||"—",d.macd_hist>=0?U:D)}${met("Supertrend",d.supertrend_bull?"BULL":"BEAR",d.supertrend_bull?P:D)}${met("ADX",d.adx||"—",d.adx>=25?A:I2)}${met("VWAP",d.above_vwap?"ABOVE":"BELOW",d.above_vwap?U:D)}${met("EMA Cross",d.golden_cross?"GOLDEN":"DEATH",d.golden_cross?U:D)}${met("Volume",d.rel_volume+"x",d.rel_volume>=1.5?U:I2)}</div>
-          <div class="st">Technical Signals</div><div class="sigbox" style="max-height:160px;overflow-y:auto">${(d.tech_signals||[]).map(sig).join("")}</div>
-        </div>
-        <div class="met" style="padding:14px">
-          <div class="st">Fundamental Metrics</div>
           <div class="mg" style="margin-bottom:10px">${met("P/E",d.pe||"—",d.pe&&d.pe<=20?U:I2)}${met("PEG",d.peg||"—",d.peg&&d.peg<=1.5?P:I2)}${met("ROE %",d.roe?d.roe+"%":"—",d.roe&&d.roe>=15?U:I2)}${met("Debt/Eq",d.debt_equity||"—",d.debt_equity&&d.debt_equity<=0.5?U:d.debt_equity>1.5?D:I2)}${met("EPS Growth",d.earnings_growth?d.earnings_growth+"%":"—",d.earnings_growth&&d.earnings_growth>=15?U:I2)}${met("Rev Growth",d.revenue_growth?d.revenue_growth+"%":"—",d.revenue_growth&&d.revenue_growth>=10?U:I2)}${met("Promoter",d.promoter_holding?d.promoter_holding+"%":"—",d.promoter_holding&&d.promoter_holding>=50?U:I2)}${met("Analyst ↑",d.analyst_upside!=null?"+"+d.analyst_upside+"%":"—",d.analyst_upside&&d.analyst_upside>=15?U:I2)}</div>
           <div class="st">Fundamental Signals</div><div class="sigbox" style="max-height:160px;overflow-y:auto">${(d.fund_signals||[]).map(sig).join("")}</div>
         </div>
@@ -1172,7 +1173,6 @@ async function analyseStock(){
         <div style="background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.2);border-radius:10px;padding:14px"><div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:${U};margin-bottom:8px">✓ Reasons to BUY</div>${(d.bullish_reasons||[]).length?d.bullish_reasons.map(s=>`<div style="font-size:11px;color:${I2};padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5">${s.replace(" ✓","")}</div>`).join(""):`<div style="font-size:11px;color:${I3}">No strong bullish signals</div>`}</div>
         <div style="background:rgba(244,63,94,.05);border:1px solid rgba(244,63,94,.2);border-radius:10px;padding:14px"><div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:${D};margin-bottom:8px">✗ Reasons to AVOID</div>${(d.bearish_reasons||[]).length?d.bearish_reasons.map(s=>`<div style="font-size:11px;color:${I2};padding:5px 0;border-bottom:1px solid var(--border);line-height:1.5">${s.replace(" ✗","")}</div>`).join(""):`<div style="font-size:11px;color:${I3}">No major bearish signals</div>`}</div>
       </div>
-      <div class="tvbox"><div class="tvtit">● Verify on TradingView</div><div class="tvlinks"><a class="tvl" href="https://www.tradingview.com/chart/?symbol=NSE:${d.symbol}" target="_blank">📈 Live Chart ↗</a><a class="tvl" href="https://www.tradingview.com/symbols/NSE-${d.symbol}/technicals/" target="_blank">📊 Technicals ↗</a><a class="tvl" href="https://www.screener.in/company/${d.symbol}/" target="_blank">📋 Screener.in ↗</a></div></div>
       <div class="disc" style="margin-top:12px"><b style="color:${A}">Note:</b> BUY/HOLD/SELL is data-driven, not personalised investment advice. Not SEBI-registered.</div>`;
     aSp(100,"Complete");document.getElementById("aResult").style.display="block";
   }catch(e){document.getElementById("aErrorBox").innerHTML=`<b>Error:</b> ${e.message}`;document.getElementById("aErrorBox").style.display="block";}
