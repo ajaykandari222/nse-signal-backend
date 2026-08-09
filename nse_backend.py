@@ -7,7 +7,7 @@ HTTP requests return in <1 second always — no more 502.
 
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
-import os, json, math, time, threading, secrets
+import os, json, math, time, threading, secrets, gc
 from functools import wraps
 from datetime import datetime
 import pytz, requests as req_lib
@@ -144,6 +144,25 @@ def get_ta():
 
 def get_ns(sym): return sym.replace("&","%26") + ".NS"
 
+def yf_retry(fn, retries=2, base_delay=1.5):
+    """Retries a yfinance call on rate-limit/crumb errors with backoff + jitter.
+    Yahoo's unofficial API intermittently rate-limits or invalidates the auth crumb
+    under load — most such failures are transient and succeed on a short retry."""
+    import random
+    last_err=None
+    for attempt in range(retries+1):
+        try:
+            return fn()
+        except Exception as e:
+            last_err=e
+            msg=str(e)
+            if "Rate limit" in msg or "Too Many Requests" in msg or "Invalid Crumb" in msg or "401" in msg:
+                if attempt < retries:
+                    time.sleep(base_delay*(attempt+1)+random.uniform(0,1))
+                    continue
+            raise
+    raise last_err
+
 # ── WATCHLIST ─────────────────────────────────────────────────────────────
 WATCHLIST = list(dict.fromkeys([
     # NIFTY 50
@@ -171,7 +190,7 @@ WATCHLIST = list(dict.fromkeys([
     "MOTILALOSW","IIFL","PNBHOUSING","LICHSGFIN","CREDITACC","SPANDANA",
     "SBFC","UGRO","M&MFIN","REPCO","APTUS","ARMANFIN","EQUITASBNK","UJJIVANSFB",
     # PHARMA & HEALTHCARE
-    "GRANULES","GLENMARK","JBCHEPHARM","NATCOPHARM","IPCA","ALEMBICLTD",
+    "GRANULES","GLENMARK","JBCHEPHARM","NATCOPHARM","IPCALAB","ALEMBICLTD",
     "NEULANDLAB","SUVEN","WOCKHARDT","AJANTPHARM","SHILPAMED","KRSNAA",
     "MEDPLUS","LALGPATH","METROPOLIS","THYROCARE","GLAXO","PFIZER","ABBOTINDIA",
     "SANOFI","SEQUENT","CAPLIN","SOLARA",
@@ -485,7 +504,7 @@ def fetch_one(sym, regime, prefetched_daily=None):
                 daily = prefetched_daily if prefetched_daily is not None and len(prefetched_daily)>=5                         else ticker.history(period="60d",interval="1d",auto_adjust=True)
                 break
             except Exception as _re:
-                if "429" in str(_re) or "rate" in str(_re).lower(): time.sleep(2**_att)
+                if "429" in str(_re) or "rate" in str(_re).lower() or "crumb" in str(_re).lower() or "401" in str(_re): time.sleep(2**_att)
                 else: raise
         df=intra if (intra is not None and len(intra)>=15) else daily
         ind=compute_indicators(df)
@@ -540,8 +559,10 @@ def _do_scan():
             batch_data = batch_download(batch, period="60d", interval="1d")
             daily_cache.update(batch_data)
             print(f"[SCAN] Batch daily fetched: {len(daily_cache)}/{len(WATCHLIST)}")
+            gc.collect()
+            time.sleep(1.5)  # spread requests over time — gentler on Yahoo's rate limiter
 
-        with ThreadPoolExecutor(max_workers=30) as ex:
+        with ThreadPoolExecutor(max_workers=10) as ex:
             futures = {ex.submit(fetch_one, sym, regime, daily_cache.get(sym)): sym for sym in WATCHLIST}
             for f in as_completed(futures, timeout=120):
                 try:
@@ -555,6 +576,7 @@ def _do_scan():
                     save_partial(results, completed, errors, partial=True)
                     print(f"[SCAN] {completed}/{len(WATCHLIST)} done, {len(results)} valid")
 
+        del daily_cache; gc.collect()
         # Final save
         save_partial(results, len(WATCHLIST), errors, partial=False)
         with _jobs_lock:
@@ -602,7 +624,8 @@ def _keep_alive():
 # ── FUNDAMENTALS ──────────────────────────────────────────────────────────
 def fetch_fundamentals(sym):
     try:
-        yf=get_yf(); info=yf.Ticker(get_ns(sym)).info
+        yf=get_yf(); tk=yf.Ticker(get_ns(sym))
+        info=yf_retry(lambda: tk.info)
         if not info or len(info)<10: return None
         cmp=info.get("currentPrice") or info.get("regularMarketPrice")
         if not cmp: return None
@@ -635,15 +658,22 @@ def fetch_fundamentals(sym):
         pe=r["pe"]; eg=r["earnings_growth"]
         r["peg"]=r["peg_direct"] or (round(pe/eg,2) if pe and eg and eg>0 else None)
         r["promoter_holding"]=r["insider_holding"]
-        # ── Lightweight technical overlay: catch bearish divergence even on fundamentally strong stocks ──
-        try:
-            daily=tk.history(period="3mo",interval="1d",auto_adjust=True)
-            tech=compute_indicators(daily) if daily is not None and len(daily)>=20 else None
-            r["bearish_divergence"]=bool(tech.get("bearish_divergence")) if tech else False
-            r["bullish_divergence"]=bool(tech.get("bullish_divergence")) if tech else False
-            r["rsi"]=tech.get("rsi") if tech else None
-        except Exception:
-            r["bearish_divergence"]=False; r["bullish_divergence"]=False; r["rsi"]=None
+        # ── Reuse the Short-Term scan's cached technical data if it's fresh — avoids a duplicate
+        # yfinance call for every stock, cutting request volume (and rate-limit risk) roughly in half ──
+        cached=get_cached_stock(sym)
+        if cached and cached.get("rsi") is not None:
+            r["bearish_divergence"]=bool(cached.get("bearish_divergence"))
+            r["bullish_divergence"]=bool(cached.get("bullish_divergence"))
+            r["rsi"]=cached.get("rsi")
+        else:
+            try:
+                daily=tk.history(period="3mo",interval="1d",auto_adjust=True)
+                tech=compute_indicators(daily) if daily is not None and len(daily)>=20 else None
+                r["bearish_divergence"]=bool(tech.get("bearish_divergence")) if tech else False
+                r["bullish_divergence"]=bool(tech.get("bullish_divergence")) if tech else False
+                r["rsi"]=tech.get("rsi") if tech else None
+            except Exception:
+                r["bearish_divergence"]=False; r["bullish_divergence"]=False; r["rsi"]=None
         return sanitise(r)
     except Exception as e: print(f"[FUND ERR] {sym}: {e}"); return None
 
@@ -751,7 +781,7 @@ def score_fundamentals(f):
 
 # ── LT SCAN ───────────────────────────────────────────────────────────────
 def _do_lt_scan():
-    """Scans the full watchlist for fundamentals in batches of 40.
+    """Scans the full watchlist for fundamentals in batches of 25.
     Saves partial top15 after each batch — frontend shows results progressively."""
     try:
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -760,13 +790,13 @@ def _do_lt_scan():
         print(f"[LT] Starting — {len(lt_list)} stocks")
 
         all_results = []
-        batch_size  = 40
+        batch_size  = 25
 
         for batch_num, batch_start in enumerate(range(0, len(lt_list), batch_size)):
             batch = lt_list[batch_start:batch_start + batch_size]
             print(f"[LT] Batch {batch_num+1}: {len(batch)} stocks")
 
-            with ThreadPoolExecutor(max_workers=20) as ex:
+            with ThreadPoolExecutor(max_workers=8) as ex:
                 futures = {ex.submit(fetch_fundamentals, sym): sym for sym in batch}
                 for f in as_completed(futures, timeout=150):
                     try:
@@ -778,6 +808,8 @@ def _do_lt_scan():
                             r["score"] = score; r["signals"] = sigs; r["grade"] = grade
                             all_results.append(sanitise(r))
                     except Exception as _ex: print(f'[WARN] {_ex}')
+            gc.collect()
+            time.sleep(2)  # spread requests over time — gentler on Yahoo's rate limiter
 
             all_results.sort(key=lambda x: x.get("score", 0), reverse=True)
             scanned = batch_start + len(batch)
@@ -801,6 +833,7 @@ def _do_lt_scan():
             _jobs["lt_scan"]["running"] = False
             _jobs["lt_scan"]["last_run"] = now
         print(f"[LT] Complete — {len(all_results)} valid from {len(lt_list)} stocks")
+        gc.collect()
 
     except Exception as e:
         print(f"[LT ERR] {e}")
@@ -1080,13 +1113,14 @@ def _do_hot_movers():
                     "near_breakout":near_bo,"setup_type":st,"setup_color":sc})
             except: return None
 
-        with ThreadPoolExecutor(max_workers=30) as ex:
+        with ThreadPoolExecutor(max_workers=10) as ex:
             futures={ex.submit(check_stock,sym):sym for sym in WATCHLIST[:160]}
             for f in as_completed(futures,timeout=120):
                 try:
                     r=f.result(timeout=8)
                     if r: shockers.append(r)
                 except Exception as _ex: print(f'[WARN] {_ex}')
+        gc.collect()
         shockers.sort(key=lambda x:(2 if x.get("is_breakout") else 1 if x.get("near_breakout") else 0, x.get("rel_volume",0)),reverse=True)
 
         # Fetch upcoming results calendar
