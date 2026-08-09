@@ -538,6 +538,12 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
 const BACKEND=window.location.origin;
 const mfExp={},ltExp={},stExp={};
 let stocks=[],ltStocks=[],logs=[],ltLogs=[];
+let watchlistTotal=null; // fetched live from /health so this never goes stale again
+async function fetchWatchlistTotal(){
+  try{ const r=await fetch(`${BACKEND}/health`); const d=await r.json(); if(d.watchlist) watchlistTotal=d.watchlist; }
+  catch(e){ /* keep null — fall back to sd.total when available */ }
+}
+fetchWatchlistTotal();
 const U="var(--up)",D="var(--dn)",A="var(--amb)",P="var(--pur)",AC="var(--acc2)",I2="var(--ink2)",I3="var(--ink3)",CY="var(--cyn)";
 
 // CLOCK
@@ -904,7 +910,7 @@ async function runScan(){
     const sd=await poll(`${BACKEND}/scan`,300,(attempt)=>{
       pollAttempt=attempt;
       const elapsed=Math.round(attempt*5);
-      sp(Math.min(20+attempt*3,80),`Scanning ${316} stocks in background… ${elapsed}s elapsed`);
+      sp(Math.min(20+attempt*3,80),`Scanning ${watchlistTotal||"all"} stocks in background… ${elapsed}s elapsed`);
       addLog(`[POLL] ${elapsed}s — waiting for scan results (attempt ${attempt})…`);
     });
     sp(85,"Rendering…");
@@ -962,6 +968,8 @@ function renderLtCard(f,rank){
     f.debt_equity!=null&&f.debt_equity<=0.5?`<span class="tag" style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:${U}">LOW DEBT</span>`:"",
     f.earnings_growth!=null&&f.earnings_growth>=15?`<span class="tag" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:${A}">+${f.earnings_growth}% EPS</span>`:"",
     f.fcf_positive?`<span class="tag" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);color:${CY}">FCF+</span>`:"",
+    f.bearish_divergence?`<span class="tag" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:${D}">⚠ BEAR DIVERGENCE</span>`:"",
+    f.bullish_divergence?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">🔄 BULL DIVERGENCE</span>`:"",
   ].join("");
   const hdr=`<div class="ch" style="grid-template-columns:50px 1fr 110px" onclick="ltExp['${f.symbol}']=!ltExp['${f.symbol}'];renderLtPicks()">
     <div style="text-align:center"><div style="font-size:20px">${medal}</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${gc};margin-top:3px;font-weight:700">${f.grade}</div></div>
@@ -981,6 +989,12 @@ function renderLtCard(f,rank){
         <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink);margin-top:4px">${fpr(f.cmp)} <span style="color:var(--ink3)">· ${f.market_cap?("₹"+(f.market_cap/1e7).toFixed(0)+"Cr MCap"):"—"}</span></div>
       </div>
     </div>
+
+    ${f.bearish_divergence?`<div style="background:rgba(244,63,94,.08);border:1px solid rgba(244,63,94,.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:18px">⚠️</span>
+      <div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;color:${D};letter-spacing:1px">BEARISH RSI DIVERGENCE DETECTED</div>
+      <div style="font-size:11px;color:var(--ink2);margin-top:2px">Fundamentals look strong, but price is making new highs while momentum weakens — a classic early exhaustion signal. Worth waiting for confirmation before entry.</div></div>
+    </div>`:""}
 
     <!-- Valuation Metrics with Bars -->
     <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);margin-bottom:10px">Valuation</div>
@@ -1639,10 +1653,10 @@ function updateCacheDisplay(sd){
   // Partial indicator
   if(part){
     if(sd.partial){
-      part.textContent = `⟳ Scanning more stocks in background (${sd.scanned}/${sd.total||317} done)`;
+      part.textContent = `⟳ Scanning more stocks in background (${sd.scanned}/${sd.total||watchlistTotal||"—"} done)`;
       part.style.color = "var(--amb)";
     } else {
-      part.textContent = `✓ ${sd.scanned||sd.total||317} stocks scanned`;
+      part.textContent = `✓ ${sd.scanned||sd.total||watchlistTotal||"—"} stocks scanned`;
       part.style.color = "var(--up)";
     }
   }
@@ -1701,10 +1715,10 @@ function updateLtCacheDisplay(sd){
   if(age)  { age.textContent = sd.scan_time ? `Scanned at ${sd.scan_time}` : ""; }
   if(part) {
     if(sd.partial){
-      part.textContent = `⟳ Scanning more stocks (${sd.scanned}/${sd.total||317} done)`;
+      part.textContent = `⟳ Scanning more stocks (${sd.scanned}/${sd.total||watchlistTotal||"—"} done)`;
       part.style.color = "var(--amb)";
     } else {
-      part.textContent = `✓ ${sd.scanned||317} stocks analysed for fundamentals`;
+      part.textContent = `✓ ${sd.scanned||sd.total||watchlistTotal||"—"} stocks analysed for fundamentals`;
       part.style.color = "var(--up)";
     }
   }
