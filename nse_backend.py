@@ -64,6 +64,22 @@ def get_broken_symbols(min_fails=3):
     with _fetch_fail_lock:
         return {s: c for s, c in _fetch_fail_counts.items() if c >= min_fails}
 
+# ── RESULTS CALENDAR CACHE ───────────────────────────────────────────────
+# Populated by Hot Movers' fetch_upcoming_results() every 30 min during market hours.
+# Reused by score_stock() so Short-Term scoring knows a stock is reacting to earnings
+# rather than treating an earnings-day gap the same as speculative technical exhaustion.
+_results_calendar = {}
+_results_calendar_lock = threading.Lock()
+def set_results_calendar(upcoming_list):
+    with _results_calendar_lock:
+        _results_calendar.clear()
+        for item in (upcoming_list or []):
+            sym = item.get("symbol")
+            if sym: _results_calendar[sym] = item
+def get_results_info(sym):
+    with _results_calendar_lock:
+        return _results_calendar.get(sym)
+
 CACHE_TTL = 240  # seconds
 
 def get_cached_stock(sym):
@@ -388,9 +404,10 @@ def compute_indicators(df):
     except Exception as e:
         print(f"  [IND ERR] {e}"); return None
 
-def score_stock(ind, regime=None):
+def score_stock(ind, regime=None, results_info=None):
     if not ind: return 0,[]
     score=0; signals=[]; rt=(regime or {}).get("trend","NEUTRAL")
+    results_today = bool(results_info and -1 <= results_info.get("days_away",99) <= 1)
     if rt=="BULL":   score+=1.0; signals.append("NIFTY BULL regime — tailwind ✓")
     elif rt=="BEAR": score-=2.0; signals.append("NIFTY BEAR regime — headwind ✗")
     else:            signals.append("NIFTY NEUTRAL regime")
@@ -430,7 +447,9 @@ def score_stock(ind, regime=None):
     elif ind.get("near_52w_high"):   score+=1.0; signals.append("Near 52W high — momentum ✓")
     bb=ind.get("bb_pct",0.5)
     if 0.2<=bb<=0.7: score+=0.5; signals.append(f"Bollinger {round(bb*100)}% — healthy ✓")
-    elif bb>0.9:     score-=0.5; signals.append("Bollinger upper band ✗")
+    elif bb>0.9:
+        if results_today: signals.append("Bollinger upper band — results-day move, not penalized")
+        else: score-=0.5; signals.append("Bollinger upper band ✗")
     # ── Reversal / Exhaustion signals ──
     if ind.get("bullish_divergence"):   score+=2.5; signals.append("Bullish RSI divergence — reversal building ✓")
     elif ind.get("bearish_divergence"): score-=2.5; signals.append("Bearish RSI divergence — exhaustion warning ✗")
@@ -440,7 +459,24 @@ def score_stock(ind, regime=None):
     else:                            signals.append("Parabolic SAR — trend intact bearish")
     mfi=ind.get("mfi",50)
     if mfi<=20:   score+=1.5; signals.append(f"MFI {mfi} — oversold, volume-backed bounce ✓")
-    elif mfi>=80: score-=1.5; signals.append(f"MFI {mfi} — overbought, exhaustion risk ✗")
+    elif mfi>=80:
+        if results_today: signals.append(f"MFI {mfi} — overbought, but results-day reaction, not penalized")
+        else: score-=1.5; signals.append(f"MFI {mfi} — overbought, exhaustion risk ✗")
+    # ── Results calendar boost ──
+    if results_info:
+        if results_today:
+            beats=results_info.get("beats",0) or 0; misses=results_info.get("misses",0) or 0
+            beat_str=results_info.get("beat_summary","—")
+            if beats>misses:
+                score+=2.5; signals.append(f"📊 Results reaction today — strong beat history ({beat_str}) ✓")
+            elif beats>0 or misses>0:
+                score+=1.0; signals.append(f"📊 Results reaction today — mixed history ({beat_str})")
+            else:
+                score+=1.0; signals.append("📊 Results reaction today — no beat/miss history available")
+        else:
+            days=results_info.get("days_away")
+            if days is not None and days<=7:
+                score+=0.5; signals.append(f"📅 Results in {days}d — pre-earnings watch")
     d=ind.get("direction","NEUTRAL")
     if d=="BULLISH":  signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✓")
     elif d=="BEARISH":signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✗")
@@ -494,7 +530,7 @@ def fetch_one(sym, regime, prefetched_daily=None):
     try:
         cached=get_cached_stock(sym)
         if cached:
-            sc,sg2=score_stock(cached.get("_ind",{}),regime)
+            sc,sg2=score_stock(cached.get("_ind",{}),regime,get_results_info(sym))
             r=dict(cached); r["score"]=sc; r["signals"]=sg2; return sanitise(r)
         yf=get_yf()
         for _att in range(3):
@@ -511,7 +547,7 @@ def fetch_one(sym, regime, prefetched_daily=None):
         ind=compute_indicators(df)
         if not ind: _record_fetch_result(sym, False); return None
         _record_fetch_result(sym, True)
-        score,signals=score_stock(ind,regime)
+        score,signals=score_stock(ind,regime,get_results_info(sym))
         # Add 14-day price history for sparkline (already have daily data)
         price_hist = []
         try:
@@ -538,6 +574,11 @@ def _do_scan():
 
         def save_partial(res, done, err, partial=True):
             sorted_res = sorted(res, key=lambda x: x["score"], reverse=True)
+            # Raw movers by |%change| — independent of setup-quality score, so a stock that's
+            # already extended (and thus penalized in scoring) still shows up here if it's genuinely moving.
+            movers = sorted(res, key=lambda x: abs(x.get("change_pct") or 0), reverse=True)[:12]
+            movers_slim = [{"symbol":m.get("symbol"),"cmp":m.get("cmp"),"change_pct":m.get("change_pct"),
+                             "rel_volume":m.get("rel_volume"),"score":m.get("score")} for m in movers]
             with _jobs_lock:
                 if "scan" not in _jobs: _jobs["scan"] = {}
                 _jobs["scan"]["result"] = sanitise({
@@ -545,7 +586,7 @@ def _do_scan():
                     "scan_time": now.strftime("%I:%M %p IST"),
                     "date": now.strftime("%d %b %Y"),
                     "scanned": done, "total": len(WATCHLIST),
-                    "errors": err, "top10": sorted_res[:10],
+                    "errors": err, "top10": sorted_res[:10], "top_movers": movers_slim,
                     "cached": True, "partial": partial,
                     "market_regime": regime,
                     "nifty_change": regime.get("change_pct", 0),
@@ -1127,6 +1168,7 @@ def _do_hot_movers():
         # Fetch upcoming results calendar
         try:
             upcoming_results = fetch_upcoming_results(session)
+            set_results_calendar(upcoming_results)  # cache for Short-Term scoring to reuse
         except:
             upcoming_results = []
 
@@ -1275,7 +1317,7 @@ def analyse(symbol):
                 price_hist=[round(float(p),2) for p in daily["Close"].tail(14).tolist() if p and p==p]
         except Exception: pass
         regime=get_job("scan").get("result",{}).get("market_regime") or fetch_nifty_regime()
-        t_score,t_sigs=score_stock(ind,regime)
+        t_score,t_sigs=score_stock(ind,regime,get_results_info(sym))
         fund=fetch_fundamentals(sym)
         f_score,f_sigs=score_fundamentals(fund) if fund else (0,["Fundamental data unavailable"])
         combined=round(t_score*0.6+f_score*0.4,1); rt=regime.get("trend","NEUTRAL")
