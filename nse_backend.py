@@ -563,7 +563,7 @@ def _do_scan():
     """Scans all stocks with 20 parallel workers.
     Saves partial top10 results progressively so frontend never times out."""
     try:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as _CFTimeoutError
         now = datetime.now(IST)
         print(f"\n[SCAN] {now.strftime('%I:%M %p IST')} — {len(WATCHLIST)} stocks")
         regime = fetch_nifty_regime()
@@ -606,21 +606,27 @@ def _do_scan():
 
         with ThreadPoolExecutor(max_workers=10) as ex:
             futures = {ex.submit(fetch_one, sym, regime, daily_cache.get(sym)): sym for sym in WATCHLIST}
-            for f in as_completed(futures, timeout=120):
-                try:
-                    r = f.result(timeout=8)
-                    if r: results.append(r)
-                    else: errors += 1
-                except: errors += 1
-                completed += 1
-                # Save partial result every 50 stocks — frontend can read these
-                if completed % 50 == 0:
-                    save_partial(results, completed, errors, partial=True)
-                    print(f"[SCAN] {completed}/{len(WATCHLIST)} done, {len(results)} valid")
+            try:
+                for f in as_completed(futures, timeout=280):
+                    try:
+                        r = f.result(timeout=8)
+                        if r: results.append(r)
+                        else: errors += 1
+                    except: errors += 1
+                    completed += 1
+                    # Save partial result every 50 stocks — frontend can read these
+                    if completed % 50 == 0:
+                        save_partial(results, completed, errors, partial=True)
+                        print(f"[SCAN] {completed}/{len(WATCHLIST)} done, {len(results)} valid")
+            except _CFTimeoutError:
+                # Ran out of time at the current concurrency — finalize with whatever completed
+                # instead of leaving the job stuck at the last 50-stock checkpoint forever.
+                print(f"[SCAN] as_completed timeout — finalizing with {completed}/{len(WATCHLIST)} done")
 
         del daily_cache; gc.collect()
-        # Final save
-        save_partial(results, len(WATCHLIST), errors, partial=False)
+        # Final save — use `completed` (not len(WATCHLIST)) so a timeout-fallback finalize
+        # honestly reports how many were actually scanned, never claims more than really happened
+        save_partial(results, completed, errors, partial=False)
         with _jobs_lock:
             _jobs["scan"]["running"] = False
             _jobs["scan"]["last_run"] = now
