@@ -1390,6 +1390,12 @@ def lt_scan():
 @app.route("/lt-refresh")
 @require_auth
 def lt_refresh():
+    job = get_job("lt_scan")
+    if job.get("running"):
+        # A scan is already progressing in the background — don't blank the display,
+        # that's what was causing the "resets back to a low number" behaviour.
+        r = job.get("result") or {}
+        return jsonify({"status":"already_running","scanned":r.get("scanned",0),"total":r.get("total",len(WATCHLIST))})
     with _jobs_lock:
         if "lt_scan" in _jobs: _jobs["lt_scan"]["result"]=None
     if set_job_running("lt_scan"): threading.Thread(target=_do_lt_scan,daemon=True).start()
