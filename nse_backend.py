@@ -1403,8 +1403,15 @@ def lt_scan():
     """Non-blocking. Returns instantly — either cached result or 202."""
     job = get_job("lt_scan")
     result = job.get("result")
-    if result and result.get("top15"):
-        return jsonify(result)
+    if result:
+        # Return the real saved state whenever one exists — even if top15 is still empty
+        # (e.g. an early batch had no stock with pe/roe data yet). Previously an empty
+        # top15 was treated as "nothing has happened", freezing the displayed scanned
+        # count at 0 until some batch finally qualified, then jumping straight to the
+        # accumulated total all at once.
+        if result.get("top15") or not result.get("partial", True):
+            return jsonify(result)      # has entries, or the scan is genuinely finished
+        return jsonify(result), 202     # still scanning — but report the real progress
     if not job.get("running", False):
         if set_job_running("lt_scan"):
             threading.Thread(target=_do_lt_scan, daemon=True).start()
