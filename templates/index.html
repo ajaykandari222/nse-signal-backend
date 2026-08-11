@@ -326,7 +326,7 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
   <div class="hero">
     <div class="hero-pill" id="heroSub"><span>⚡</span> RSI · MACD · Supertrend · ADX · 52W Breakout · Volume · Fundamentals</div>
     <h1 id="heroTitle">India's Best <span class="grad">Market Opportunities</span></h1>
-    <p id="heroDesc">Scans 350+ NSE stocks — large, mid and small caps. 10 proven indicators from real Yahoo Finance candles. Background refresh every 5 minutes.</p>
+    <p id="heroDesc">Scans large, mid and small cap NSE stocks. 10 proven indicators from real Yahoo Finance candles. Background refresh every 5 minutes during market hours.</p>
   </div>
   <div class="tabnav">
     <button class="tb on" id="tab-short"   onclick="sw('short')">⚡ Short-Term<span class="tb-sub">2–3 day trades</span></button>
@@ -352,7 +352,7 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
       <span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:var(--up2)">🚀 52W Breakout</span>
       <span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.25);color:var(--dn2)">ATR Target</span>
     </div>
-    <div class="sbox"><button class="btn" id="scanBtn" onclick="runScan()">▶ Run Live Technical Scan</button><div class="btn-sub" id="scanSub">350+ stocks · cached every 5 min · returns instantly if cached</div></div>
+    <div class="sbox"><button class="btn" id="scanBtn" onclick="runScan()">▶ Run Live Technical Scan</button><div class="btn-sub" id="scanSub">Cached every 5 min in market hours · returns instantly if cached</div></div>
     <div class="pgw" id="progWrap" style="display:none"><div class="pgl"><span id="progLbl"></span><span id="progPct">0%</span></div><div class="pgb"><div class="pgf" id="progFill" style="width:0%"></div></div></div>
     <div class="errb" id="errorBox" style="display:none"></div>
     <div class="sum" id="summary" style="display:none">
@@ -394,7 +394,7 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
   <polyline points="2,40 14,28 22,34 34,16 44,22 56,6" stroke="var(--acc2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="56" cy="6" r="3" fill="var(--up)"/>
   <line x1="2" y1="46" x2="62" y2="46" stroke="var(--border2)" stroke-width="1"/>
-</svg><p>Press <b style="color:var(--ink)">Run Live Technical Scan</b>. Computes RSI, MACD, Supertrend, ADX, StochRSI, VWAP, EMA and 52W breakout for 350+ NSE stocks. Results cached every 5 min.</p></div>
+</svg><p>Press <b style="color:var(--ink)">Run Live Technical Scan</b>. Computes RSI, MACD, Supertrend, ADX, StochRSI, VWAP, EMA and 52W breakout for large, mid and small cap NSE stocks. Results cached every 5 min during market hours.</p></div>
     <div class="disc"><b style="color:var(--amb)">Data:</b> Yahoo Finance (~15 min delay). Score /23. Realistic win rate 63–70% for 2–3 day trades. Not SEBI-registered advice.</div>
   </div>
 
@@ -655,18 +655,14 @@ async function fetchIndices(){
     const r=await fetch(`${BACKEND}/indices`,{credentials:"include"});
     const d=await r.json();
     const fmt=n=>n==null?"—":Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
-    function absChg(idx){
-      if(!idx||!idx.price||idx.pct==null) return null;
-      // point change = price * pct/100 (approx for indices)
-      return Math.round(idx.price * idx.pct / 100);
-    }
     const data=[["nifty",d.nifty],["bn",d.banknifty],["sx",d.sensex]];
     data.forEach(([key,idx])=>{
       if(!idx||!idx.price) return;
       const c=idx.pct>=0?"var(--up)":"var(--dn)";
       const arrow=idx.pct>=0?"▲":"▼";
-      const pt=absChg(idx);
-      const ptStr=pt!=null?Math.abs(pt).toLocaleString("en-IN"):"—";
+      // Use the backend's precise stored point change directly, rather than reconstructing
+      // it from the rounded percentage (which drifts slightly due to double-rounding).
+      const ptStr=idx.change!=null?Math.abs(idx.change).toLocaleString("en-IN"):"—";
       ["","2"].forEach(sfx=>{
         const pEl=document.getElementById(`t-${key}-p${sfx}`);
         const cEl=document.getElementById(`t-${key}-c${sfx}`);
@@ -1605,6 +1601,11 @@ function countUp(el,target,duration=600){
 }
 
 // ── MARKET STATUS ───────────────────────────────────────────────
+function isMarketOpenNow(){
+  const now=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+  const day=now.getDay(); const mins=now.getHours()*60+now.getMinutes();
+  return day!==0 && day!==6 && mins>=555 && mins<=930;
+}
 function updateMarketStatus(){
   const now=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
   const day=now.getDay(); // 0=Sun,6=Sat
@@ -1746,10 +1747,11 @@ function updateCacheDisplay(sd){
   const ageMins   = Math.floor(ageMs / 60000);
   const ageSecs   = Math.floor((ageMs % 60000) / 1000);
 
-  // Cache freshness thresholds
-  // Scan auto-refreshes every 5 min in background
-  const STALE_MIN = 5;    // orange after 5 min
-  const OLD_MIN   = 10;   // red after 10 min (backend may have restarted)
+  // Cache freshness thresholds — match the backend's actual refresh cadence:
+  // every 5 min during market hours, every 30 min otherwise (see scheduler).
+  const marketOpen = isMarketOpenNow();
+  const STALE_MIN = marketOpen ? 5 : 30;
+  const OLD_MIN   = marketOpen ? 10 : 45;
 
   let dotColor, labelColor, labelText, dotGlow;
   if(ageMins < STALE_MIN){
@@ -1759,7 +1761,9 @@ function updateCacheDisplay(sd){
       : `FRESH — ${ageMins}m ${ageSecs}s ago`;
   } else if(ageMins < OLD_MIN){
     dotColor="#f59e0b"; labelColor="var(--amb)"; dotGlow="var(--amb)";
-    labelText = `CACHED — ${ageMins}m ago (auto-refresh running in background)`;
+    labelText = marketOpen
+      ? `CACHED — ${ageMins}m ago (auto-refresh running in background)`
+      : `CACHED — ${ageMins}m ago (market closed — refreshing every 30 min)`;
   } else {
     dotColor="#f43f5e"; labelColor="var(--dn)"; dotGlow="var(--dn)";
     labelText = `STALE — ${ageMins}m ago · click Refresh Now`;
@@ -1788,13 +1792,14 @@ function updateCacheDisplay(sd){
     }
   }
 
-  // Countdown to next auto-refresh (every 5 min)
+  // Countdown to next auto-refresh (5 min in market hours, 30 min otherwise)
   if(next){
-    const nextMs  = (5 * 60 * 1000) - ageMs;
+    const refreshMs = (marketOpen ? 5 : 30) * 60 * 1000;
+    const nextMs  = refreshMs - ageMs;
     if(nextMs > 0){
       const nextMins = Math.floor(nextMs / 60000);
       const nextSecs = Math.floor((nextMs % 60000) / 1000);
-      next.textContent = `Next background refresh in ${nextMins}m ${nextSecs}s`;
+      next.textContent = `Next background refresh in ${nextMins}m ${nextSecs}s${marketOpen?"":" (market closed)"}`;
     } else {
       next.textContent = `Background refresh overdue — click Refresh Now`;
     }
