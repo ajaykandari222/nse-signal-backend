@@ -645,12 +645,19 @@ def _is_market_open():
     return mo<=n<=mc
 
 def _scheduler():
-    time.sleep(8); _hot_last=0; _sec_last=0
+    time.sleep(8); _hot_last=0; _sec_last=0; _scan_last=0
     while True:
         try:
             now_ts=time.time()
-            if set_job_running("scan"): _do_scan()
-            if _is_market_open() and now_ts-_hot_last>1800:
+            market_open=_is_market_open()
+            # Scan every 5 min during market hours. Outside market hours, only every 30 min —
+            # data doesn't change after close, so there's no reason to hammer Yahoo Finance
+            # every 5 min for 18 hours a day when nothing's moving.
+            scan_interval = 300 if market_open else 1800
+            if now_ts-_scan_last>scan_interval or _scan_last==0:
+                if set_job_running("scan"):
+                    _do_scan(); _scan_last=now_ts
+            if market_open and now_ts-_hot_last>1800:
                 if set_job_running("hot_movers"):
                     threading.Thread(target=_do_hot_movers,daemon=True).start()
                     _hot_last=now_ts; print("[SCHED] Auto hot movers")
