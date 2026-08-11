@@ -1305,11 +1305,28 @@ def indices():
         yf=get_yf(); out={}
         for name,sym in [("nifty","^NSEI"),("sensex","^BSESN"),("banknifty","^NSEBANK")]:
             try:
-                df=yf.Ticker(sym).history(period="1d",interval="5m",auto_adjust=True)
-                if df is not None and len(df)>1:
-                    c=float(df["Close"].squeeze().iloc[-1]); p=float(df["Close"].squeeze().iloc[-2])
+                # fast_info gives last_price vs previous_close directly — this is the correct
+                # "today's change" comparison. The old code diffed the last two 5-min candles
+                # against each other instead of against yesterday's close, which gave a tiny/
+                # wrong change value (and a stale one entirely once the market was closed).
+                fi = yf_retry(lambda: yf.Ticker(sym).fast_info)
+                c = float(fi["last_price"]); p = float(fi["previous_close"])
+                if c and p:
                     out[name]={"price":round(c,2),"change":round(c-p,2),"pct":round((c-p)/p*100,2)}
-            except: out[name]={}
+                else:
+                    out[name]={}
+            except Exception:
+                # Fallback: previous behaviour, but compare against prior day's close, not
+                # the prior 5-min candle
+                try:
+                    df=yf.Ticker(sym).history(period="5d",interval="1d",auto_adjust=True)
+                    if df is not None and len(df)>1:
+                        c=float(df["Close"].iloc[-1]); p=float(df["Close"].iloc[-2])
+                        out[name]={"price":round(c,2),"change":round(c-p,2),"pct":round((c-p)/p*100,2)}
+                    else:
+                        out[name]={}
+                except Exception:
+                    out[name]={}
         return jsonify(out)
     except: return jsonify({"nifty":{},"sensex":{},"banknifty":{}})
 
