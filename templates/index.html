@@ -229,6 +229,19 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
   border:1px solid rgba(99,102,241,.35);
   box-shadow:0 2px 16px rgba(99,102,241,.25),inset 0 1px 0 rgba(255,255,255,.05);}
 
+/* ── COLLAPSED CARD BEAUTIFICATION ── */
+.card{transition:all .25s cubic-bezier(.4,0,.2,1);position:relative;}
+.card:hover{transform:translateY(-2px);}
+.ch{position:relative;}
+.dchip{display:inline-flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;
+  font-weight:800;border-radius:9px;padding:5px 11px;font-size:12px;line-height:1;white-space:nowrap;}
+.dir-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.sym-glow{font-size:16px;font-weight:800;letter-spacing:-.3px;}
+.rsi-mini{display:flex;align-items:center;gap:6px;margin-top:7px;}
+.rsi-mini-track{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;position:relative;}
+.rsi-mini-fill{height:100%;border-radius:3px;transition:width .8s cubic-bezier(.4,0,.2,1);}
+.gcard{border-radius:var(--r);}
+
 /* Buttons — richer gradient + shimmer */
 .btn{
   background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%);
@@ -910,11 +923,13 @@ function renderCard(s,rank){
       ${medal?`<div style="font-size:22px;line-height:1">${medal}</div>`:makeRing(s.score,23,g.c,44)}
       ${!medal?`<div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:${g.c};font-weight:700">${g.g}</div>`:""}
     </div>
-    <div><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap"><span class="sym">${s.symbol}</span>${secTag}${watchlistStar(s.symbol)}</div><div class="badges">${bdgs}</div><div class="rb"><div class="rt"><div class="rf" style="width:${Math.min(100,s.rsi||50)}%;background:${rc2}"></div></div><span class="rv" style="color:${rc2}">${s.rsi||"—"}</span></div></div>
-    <div class="pc"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div class="cmp">${fpr(s.cmp)}</div>${s.price_history?makeMiniOHLC(s.price_history):""}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:${uc};margin-top:1px">${fpct(s.change_pct)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${dc};margin-top:3px">→ ${fpr(s.target_price)} (${s.target_pct>=0?"+":""}${s.target_pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I3};margin-top:2px">H:${fpr(s.high)} L:${fpr(s.low)}</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
+    <div><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap"><span class="dir-dot" style="background:${dc};box-shadow:0 0 6px ${dc}"></span><span class="sym-glow">${s.symbol}</span>${secTag}${watchlistStar(s.symbol)}</div><div class="badges">${bdgs}</div><div class="rsi-mini"><div class="rsi-mini-track"><div class="rsi-mini-fill" style="width:${Math.min(100,s.rsi||50)}%;background:${rc2};box-shadow:0 0 6px ${rc2}66"></div></div><span class="rv" style="color:${rc2}">RSI ${s.rsi||"—"}</span></div></div>
+    <div class="pc"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-bottom:4px"><div class="cmp">${fpr(s.cmp)}</div>${s.price_history?makeMiniOHLC(s.price_history):""}</div><span class="dchip" style="background:${uc}16;border:1px solid ${uc}40;color:${uc}">${s.change_pct>=0?"▲":"▼"} ${fpct(s.change_pct).replace(/^[+-]/,"")}</span><div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:${dc};margin-top:6px">→ ${fpr(s.target_price)} (${s.target_pct>=0?"+":""}${s.target_pct}%)</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${I3};margin-top:2px">H:${fpr(s.high)} L:${fpr(s.low)}</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
   </div>`;
-  if(!isO)return`<div class="card ${topCls} card-enter" style="border-left:3px solid ${uc};${delay}">${hdr}</div>`;
-  return`<div class="card open ${topCls} card-enter" style="border-left:3px solid ${uc};${delay}">${hdr}
+  const glowBg=`background:linear-gradient(135deg,${dc}0d,transparent 65%);`;
+  const glowShadow=rank>3?`box-shadow:0 1px 3px rgba(0,0,0,.3),inset 0 0 0 1px ${dc}12;`:"";
+  if(!isO)return`<div class="card gcard ${topCls} card-enter" style="border-left:3px solid ${uc};${glowBg}${glowShadow}${delay}">${hdr}</div>`;
+  return`<div class="card gcard open ${topCls} card-enter" style="border-left:3px solid ${uc};${glowBg}${glowShadow}${delay}">${hdr}
   <div class="cb">${renderTechDetail(s)}</div></div>`
 }
 function renderPicks(){
@@ -1015,12 +1030,13 @@ function renderLtCard(f,rank){
     f.bullish_divergence?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">🔄 BULL DIVERGENCE</span>`:"",
   ].join("");
   const hdr=`<div class="ch" style="grid-template-columns:50px 1fr 110px" onclick="ltExp['${f.symbol}']=!ltExp['${f.symbol}'];renderLtPicks()">
-    <div style="text-align:center"><div style="font-size:20px">${medal}</div><div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${gc};margin-top:3px;font-weight:700">${f.grade}</div></div>
-    <div><span class="sym">${f.symbol}</span><div style="font-size:11px;color:${I3};margin-top:1px">${f.company||""} ${f.sector?"· "+f.sector:""}</div><div class="badges">${tags}</div></div>
-    <div class="pc"><div class="cmp">${fpr(f.cmp)}</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${gc};margin-top:3px;font-weight:700">Score ${f.score}/23</div><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
+    <div style="text-align:center"><div style="font-size:20px">${medal}</div><div class="dchip" style="background:${gc}18;border:1px solid ${gc}45;color:${gc};padding:2px 8px;font-size:10px;margin-top:4px">${f.grade}</div></div>
+    <div><span class="sym-glow">${f.symbol}</span><div style="font-size:11px;color:${I3};margin-top:2px">${f.company||""} ${f.sector?"· "+f.sector:""}</div><div class="badges">${tags}</div></div>
+    <div class="pc"><div class="cmp">${fpr(f.cmp)}</div><span class="dchip" style="background:${gc}16;border:1px solid ${gc}40;color:${gc};font-size:10px;margin-top:5px">Score ${f.score}/23</span><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
   </div>`;
-  if(!isO)return`<div class="card">${hdr}</div>`;
-  return`<div class="card open">${hdr}
+  const glowBg=`background:linear-gradient(135deg,${gc}0d,transparent 65%);`;
+  if(!isO)return`<div class="card gcard card-enter" style="border-left:3px solid ${gc};${glowBg}box-shadow:0 1px 3px rgba(0,0,0,.3),inset 0 0 0 1px ${gc}12;">${hdr}</div>`;
+  return`<div class="card gcard open card-enter" style="border-left:3px solid ${gc};${glowBg}">${hdr}
   <div class="cb">
 
     <!-- Score Ring + Grade Banner -->
