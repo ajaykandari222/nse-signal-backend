@@ -574,7 +574,7 @@ const U="var(--up)",D="var(--dn)",A="var(--amb)",P="var(--pur)",AC="var(--acc2)"
 setInterval(()=>{const t=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));const p=n=>String(n).padStart(2,"0");const el=document.getElementById("clock");if(el)el.textContent=`${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())} IST`;},1000);
 
 // POLL
-async function poll(url,maxWait=300,onWait){
+async function poll(url,maxWait=300,onWait,untilComplete=false){
   // polls every 5s, maxWait=300s (5 min) default
   // Routes are non-blocking so each call returns instantly (202 or result)
   const t0=Date.now();
@@ -584,14 +584,19 @@ async function poll(url,maxWait=300,onWait){
       const r=await fetch(url,{credentials:"include"});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
       const d=await r.json();
-      // Got partial or full results — return immediately
-      if(d.top10  && d.top10.length>0)  return d;
-      if(d.top15  && d.top15.length>0)  return d;
-      if(d.sectors && d.sectors.length>0) return d;
-      if(d.upper_circuits || d.volume_shockers) return d;
+      const hasData = (d.top10&&d.top10.length>0)||(d.top15&&d.top15.length>0)||(d.sectors&&d.sectors.length>0)||d.upper_circuits||d.volume_shockers;
+      if(hasData){
+        // If caller wants the FULL scan (not just the first partial batch), keep polling
+        // until partial===false — otherwise a still-running background scan looks "done"
+        // at 7% complete, which invites an accidental hard restart via Refresh Now.
+        if(untilComplete && d.partial){
+          attempts++; if(onWait) onWait(attempts,d); await wait(5000); continue;
+        }
+        return d;
+      }
       // Still scanning — wait 5s and retry
       attempts++;
-      if(onWait) onWait(attempts);
+      if(onWait) onWait(attempts,d);
       await wait(5000);
     }catch(e){
       if(e.message?.startsWith("HTTP")) throw e;
@@ -1170,11 +1175,13 @@ async function runLtScan(){
   ltAddLog("[SCAN] Polling — shows first results after ~90s, improves as more stocks are scanned in background…");
   ltSp(15,"Fetching fundamental data…");
   try{
-    const sd=await poll(`${BACKEND}/lt-scan`,600,(attempt)=>{
+    const sd=await poll(`${BACKEND}/lt-scan`,600,(attempt,partialD)=>{
       const elapsed=Math.round(attempt*5);
-      ltSp(Math.min(10+attempt*2,80),`Scanning fundamentals… ${elapsed}s elapsed (first results ~90s)`);
-      ltAddLog(`[POLL] ${elapsed}s — waiting for fundamental scan results…`);
-    });
+      const sc=partialD?.scanned, tot=partialD?.total;
+      const progText = sc!=null ? `${sc}/${tot} stocks scanned…` : "Scanning fundamentals…";
+      ltSp(Math.min(10+attempt*2,80),`${progText} ${elapsed}s elapsed`);
+      ltAddLog(`[POLL] ${elapsed}s — ${sc!=null?`${sc}/${tot} done`:"waiting for first batch"}…`);
+    },true);
     ltSp(85,"Rendering…");
     ltAddLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks analysed`);
     sd.top15.forEach((f,i)=>ltAddLog(`[#${i+1}] ${f.symbol}: P/E:${f.pe||"—"} ROE:${f.roe||"—"}% Score:${f.score}/23 (${f.grade})`));
@@ -1847,7 +1854,14 @@ async function forceRefresh(){
 
 async function forceLtRefresh(){
   try{
-    await fetch(`${BACKEND}/lt-refresh`, {credentials:"include"});
+    const r=await fetch(`${BACKEND}/lt-refresh`, {credentials:"include"});
+    const d=await r.json();
+    if(d.status==="already_running"){
+      // A scan is already in progress — don't wipe the display, just keep watching it.
+      ltAddLog(`[INFO] Scan already running — ${d.scanned}/${d.total} done so far, continuing to watch…`);
+      await runLtScan();
+      return;
+    }
     _ltTimestamp = null;
     document.getElementById("ltCacheStatus").style.display = "none";
     ltStocks = [];
