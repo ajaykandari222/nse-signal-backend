@@ -407,7 +407,10 @@ def compute_indicators(df):
 def score_stock(ind, regime=None, results_info=None):
     if not ind: return 0,[]
     score=0; signals=[]; rt=(regime or {}).get("trend","NEUTRAL")
-    results_today = bool(results_info and -1 <= results_info.get("days_away",99) <= 1)
+    # "Reacting to results" window: -5 (reported up to 5 trading days ago) through +1 (results tomorrow).
+    # A post-earnings re-rating often runs for several sessions, not just the single reaction day —
+    # narrower windows miss exactly the "still climbing 3 days after results" case (e.g. Bosch).
+    results_today = bool(results_info and -5 <= results_info.get("days_away",99) <= 1)
     if rt=="BULL":   score+=1.0; signals.append("NIFTY BULL regime — tailwind ✓")
     elif rt=="BEAR": score-=2.0; signals.append("NIFTY BEAR regime — headwind ✗")
     else:            signals.append("NIFTY NEUTRAL regime")
@@ -467,12 +470,14 @@ def score_stock(ind, regime=None, results_info=None):
         if results_today:
             beats=results_info.get("beats",0) or 0; misses=results_info.get("misses",0) or 0
             beat_str=results_info.get("beat_summary","—")
+            da=results_info.get("days_away",0)
+            when = "today" if da==0 else "tomorrow" if da==1 else f"{abs(da)}d ago"
             if beats>misses:
-                score+=2.5; signals.append(f"📊 Results reaction today — strong beat history ({beat_str}) ✓")
+                score+=2.5; signals.append(f"📊 Results {when} — strong beat history ({beat_str}) ✓")
             elif beats>0 or misses>0:
-                score+=1.0; signals.append(f"📊 Results reaction today — mixed history ({beat_str})")
+                score+=1.0; signals.append(f"📊 Results {when} — mixed history ({beat_str})")
             else:
-                score+=1.0; signals.append("📊 Results reaction today — no beat/miss history available")
+                score+=1.0; signals.append(f"📊 Results {when} — no beat/miss history available")
         else:
             days=results_info.get("days_away")
             if days is not None and days<=7:
@@ -1015,7 +1020,7 @@ def fetch_upcoming_results(session):
                                 break
                             except: continue
                         days_away = (meeting_date - today).days
-                        if -1 <= days_away <= 7:  # results today or next 7 days
+                        if -7 <= days_away <= 7:  # results in the last week, or upcoming week
                             # Fetch earnings beat/miss history
                             _beat_miss=[]; _beats=0; _misses=0; _beat_str="—"
                             try:
@@ -1032,13 +1037,15 @@ def fetch_upcoming_results(session):
                                     _misses=len(_beat_miss)-_beats
                                     _beat_str=f"{_beats}B/{_misses}M last {len(_beat_miss)}Q"
                             except Exception: pass
+                            urgency = ("TODAY" if days_away==0 else f"Reported {abs(days_away)}d ago" if days_away<0
+                                       else f"In {days_away} day{'s' if days_away>1 else ''}")
                             upcoming.append({
                                       "symbol":     sym,
                                       "date":       date_s,
                                       "days_away":  days_away,
                                       "purpose":    purpose,
-                                      "urgency":    "TODAY" if days_away<=0 else f"In {days_away} day{'s' if days_away>1 else ''}",
-                                      "urgency_color": "#ff4d6d" if days_away<=1 else "#f59e0b" if days_away<=3 else "#3d9bff",
+                                      "urgency":    urgency,
+                                      "urgency_color": "#ff4d6d" if -1<=days_away<=1 else "#f59e0b" if days_away<=3 else "#3d9bff",
                                       "beat_summary": _beat_str,
                                       "beats": _beats, "misses": _misses,
                                   })
