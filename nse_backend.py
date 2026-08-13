@@ -250,7 +250,7 @@ WATCHLIST = list(dict.fromkeys([
     # HOTELS
     "INDHOTEL","EIHOTEL","LEMONTREE","CHALET","THOMASCOOK",
     # SEMIS & ELECTRONICS
-    "KAYNES","SYRMA","AMBER","PGEL",
+    "KAYNES","SYRMA","AMBER","PGEL","NETWEB",
 ]))
 
 # ── SECTOR MAP ─────────────────────────────────────────────────────────────
@@ -591,7 +591,7 @@ def _do_scan():
                     "scan_time": now.strftime("%I:%M %p IST"),
                     "date": now.strftime("%d %b %Y"),
                     "scanned": done, "total": len(WATCHLIST),
-                    "errors": err, "top10": sorted_res[:10], "top_movers": movers_slim,
+                    "errors": err, "top10": sorted_res[:20], "top_movers": movers_slim,
                     "cached": True, "partial": partial,
                     "market_regime": regime,
                     "nifty_change": regime.get("change_pct", 0),
@@ -883,7 +883,7 @@ def _do_lt_scan():
                     "scan_time": now.strftime("%I:%M %p IST"),
                     "date": now.strftime("%d %b %Y"),
                     "scanned": scanned, "total": len(lt_list),
-                    "top15": all_results[:15], "partial": more,
+                    "top15": all_results[:20], "partial": more,
                 }
                 _jobs["lt_scan"]["running"] = more
             print(f"[LT] Batch {batch_num+1} done — {len(all_results)} valid so far")
@@ -1280,9 +1280,13 @@ def scan():
     Frontend polls every 5s. Scan runs in background thread."""
     job = get_job("scan")
     result = job.get("result")
-    # Have results (partial or complete) — return immediately
-    if result and result.get("top10"):
-        return jsonify(result)
+    if result:
+        # Return the real saved state whenever one exists — even if top10 is still empty
+        # (e.g. an early batch hasn't produced a scored stock yet). An empty top10 used to
+        # be treated as "nothing has happened", freezing the displayed scanned count at 0.
+        if result.get("top10") or not result.get("partial", True):
+            return jsonify(result)
+        return jsonify(result), 202
     # Start scan if not running
     if not job.get("running", False):
         if set_job_running("scan"):
