@@ -928,10 +928,38 @@ function renderCard(s,rank){
   return`<div class="card gcard open ${topCls} card-enter" style="border-left:3px solid ${uc};${glowBg}${glowShadow}${delay}">${hdr}
   <div class="cb">${renderTechDetail(s)}</div></div>`
 }
+// COMPACT ROW for ranks 11-20 — same expanded detail on click, condensed collapsed row
+function renderCardCompact(s,rank){
+  const isO=!!stExp[s.symbol];const g=gi(s.score);
+  const uc=s.change_pct>=0?U:D;const dc=s.direction==="BULLISH"?U:s.direction==="BEARISH"?D:A;
+  const row=`<div onclick="stExp['${s.symbol}']=!stExp['${s.symbol}'];renderPicks()" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3);width:22px;text-align:center">#${rank}</div>
+    <div style="width:32px;height:32px;border-radius:50%;background:${g.c}14;border:1px solid ${g.c}40;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;color:${g.c};flex-shrink:0">${g.g}</div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:5px"><span class="dir-dot" style="background:${dc};box-shadow:0 0 5px ${dc}"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--ink)">${s.symbol}</span></div>
+      <div style="font-size:9px;color:${I3}">${s.direction||"NEUTRAL"} · RSI ${s.rsi||"—"}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      <div class="cmp" style="font-size:12px">${fpr(s.cmp)}</div>
+      <span class="dchip" style="background:${uc}16;border:1px solid ${uc}40;color:${uc};font-size:9px;padding:2px 7px">${s.change_pct>=0?"▲":"▼"} ${fpct(s.change_pct).replace(/^[+-]/,"")}</span>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${I3};width:14px;text-align:center">${isO?"▲":"▼"}</div>
+  </div>`;
+  const glowBg=`background:linear-gradient(135deg,${dc}08,transparent 65%);`;
+  if(!isO)return`<div class="card gcard card-enter" style="border-left:2px solid ${uc};${glowBg}">${row}</div>`;
+  return`<div class="card gcard open card-enter" style="border-left:2px solid ${uc};${glowBg}">${row}
+  <div class="cb">${renderTechDetail(s)}</div></div>`
+}
 function renderPicks(){
   const c=document.getElementById("picks");
   if(!stocks.length){c.innerHTML="";return;}
-  c.innerHTML=`<div class="pkh"><span class="pkt">Top ${stocks.length} Technical Setups</span><span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">LIVE DATA</span></div>`+stocks.map((s,i)=>renderCard(s,i+1)).join("");
+  const top=stocks.slice(0,10), rest=stocks.slice(10,20);
+  let html=`<div class="pkh"><span class="pkt">Top ${Math.min(10,stocks.length)} Technical Setups</span><span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">LIVE DATA</span></div>`+top.map((s,i)=>renderCard(s,i+1)).join("");
+  if(rest.length){
+    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">tap to expand</span></div>`
+        +`<div style="border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">`+rest.map((s,i)=>renderCardCompact(s,i+11)).join("")+`</div>`;
+  }
+  c.innerHTML=html;
 }
 
 // SHORT-TERM SCAN
@@ -960,11 +988,13 @@ async function runScan(){
     sp(25,"Polling for scan results…");
     addLog("[SCAN] Scan started in background — results appear as stocks are processed…");
     let pollAttempt=0;
-    const sd=await poll(`${BACKEND}/scan`,300,(attempt)=>{
+    const sd=await poll(`${BACKEND}/scan`,300,(attempt,partialD)=>{
       pollAttempt=attempt;
       const elapsed=Math.round(attempt*5);
-      sp(Math.min(20+attempt*3,80),`Scanning ${watchlistTotal||"all"} stocks in background… ${elapsed}s elapsed`);
-      addLog(`[POLL] ${elapsed}s — waiting for scan results (attempt ${attempt})…`);
+      const sc=partialD?.scanned, tot=partialD?.total||watchlistTotal;
+      const progText = sc!=null && sc>0 ? `${sc}/${tot} stocks scanned…` : `Scanning ${watchlistTotal||"all"} stocks in background…`;
+      sp(Math.min(20+attempt*3,80),`${progText} ${elapsed}s elapsed`);
+      addLog(`[POLL] ${elapsed}s — ${sc!=null&&sc>0?`${sc}/${tot} done`:"waiting for first batch"}…`);
     });
     sp(85,"Rendering…");
     addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time}`);
@@ -1011,30 +1041,9 @@ function ltAddLog(m){
 }
 function ltSp(pct,lbl){document.getElementById("ltProgFill").style.width=pct+"%";document.getElementById("ltProgPct").textContent=pct+"%";if(lbl!==undefined)document.getElementById("ltProgLbl").textContent=lbl;}
 
-// RENDER LONG-TERM CARD
-function renderLtCard(f,rank){
-  const isO=!!ltExp[f.symbol];const gc=ltGC(f.grade);
-  const medal=rank===1?"🥇":rank===2?"🥈":"🥉";
-  const tags=[
-    f.pe!=null&&f.pe<=15?`<span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">P/E ${f.pe}</span>`:f.pe!=null?`<span class="tag" style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I2}">P/E ${f.pe}</span>`:"",
-    f.peg!=null&&f.peg<=1.5?`<span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:${P}">PEG ${f.peg}</span>`:"",
-    f.roe!=null&&f.roe>=15?`<span class="tag" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25);color:${AC}">ROE ${f.roe}%</span>`:"",
-    f.debt_equity!=null&&f.debt_equity<=0.5?`<span class="tag" style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:${U}">LOW DEBT</span>`:"",
-    f.earnings_growth!=null&&f.earnings_growth>=15?`<span class="tag" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:${A}">+${f.earnings_growth}% EPS</span>`:"",
-    f.fcf_positive?`<span class="tag" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);color:${CY}">FCF+</span>`:"",
-    f.bearish_divergence?`<span class="tag" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:${D}">⚠ BEAR DIVERGENCE</span>`:"",
-    f.bullish_divergence?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">🔄 BULL DIVERGENCE</span>`:"",
-  ].join("");
-  const hdr=`<div class="ch" style="grid-template-columns:50px 1fr 110px" onclick="ltExp['${f.symbol}']=!ltExp['${f.symbol}'];renderLtPicks()">
-    <div style="text-align:center"><div style="font-size:20px">${medal}</div><div class="dchip" style="background:${gc}18;border:1px solid ${gc}45;color:${gc};padding:2px 8px;font-size:10px;margin-top:4px">${f.grade}</div></div>
-    <div><span class="sym-glow">${f.symbol}</span><div style="font-size:11px;color:${I3};margin-top:2px">${f.company||""} ${f.sector?"· "+f.sector:""}</div><div class="badges">${tags}</div></div>
-    <div class="pc"><div class="cmp">${fpr(f.cmp)}</div><span class="dchip" style="background:${gc}16;border:1px solid ${gc}40;color:${gc};font-size:10px;margin-top:5px">Score ${f.score}/23</span><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
-  </div>`;
-  const glowBg=`background:linear-gradient(135deg,${gc}0d,transparent 65%);`;
-  if(!isO)return`<div class="card gcard card-enter" style="border-left:3px solid ${gc};${glowBg}box-shadow:0 1px 3px rgba(0,0,0,.3),inset 0 0 0 1px ${gc}12;">${hdr}</div>`;
-  return`<div class="card gcard open card-enter" style="border-left:3px solid ${gc};${glowBg}">${hdr}
-  <div class="cb">
-
+function renderLtDetail(f){
+  const gc=ltGC(f.grade);
+  return `
     <!-- Score Ring + Grade Banner -->
     <div style="display:flex;align-items:center;gap:16px;padding:16px 18px;background:${gc}0a;border:1px solid ${gc}25;border-radius:12px;margin-bottom:16px">
       ${makeRing(f.score,23,gc,52)}
@@ -1166,13 +1175,64 @@ function renderLtCard(f,rank){
         <a href="https://www.screener.in/company/${f.symbol}/" target="_blank" class="tvl">📋 Screener.in ↗</a>
         <a href="https://www.tradingview.com/chart/?symbol=NSE:${f.symbol}" target="_blank" class="tvl">📈 Chart ↗</a>
       </div>
+    </div>`;
+}
+// RENDER LONG-TERM CARD
+function renderLtCard(f,rank){
+  const isO=!!ltExp[f.symbol];const gc=ltGC(f.grade);
+  const medal=rank===1?"🥇":rank===2?"🥈":"🥉";
+  const tags=[
+    f.pe!=null&&f.pe<=15?`<span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">P/E ${f.pe}</span>`:f.pe!=null?`<span class="tag" style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I2}">P/E ${f.pe}</span>`:"",
+    f.peg!=null&&f.peg<=1.5?`<span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:${P}">PEG ${f.peg}</span>`:"",
+    f.roe!=null&&f.roe>=15?`<span class="tag" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25);color:${AC}">ROE ${f.roe}%</span>`:"",
+    f.debt_equity!=null&&f.debt_equity<=0.5?`<span class="tag" style="background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.2);color:${U}">LOW DEBT</span>`:"",
+    f.earnings_growth!=null&&f.earnings_growth>=15?`<span class="tag" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.25);color:${A}">+${f.earnings_growth}% EPS</span>`:"",
+    f.fcf_positive?`<span class="tag" style="background:rgba(6,182,212,.1);border:1px solid rgba(6,182,212,.25);color:${CY}">FCF+</span>`:"",
+    f.bearish_divergence?`<span class="tag" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:${D}">⚠ BEAR DIVERGENCE</span>`:"",
+    f.bullish_divergence?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">🔄 BULL DIVERGENCE</span>`:"",
+  ].join("");
+  const hdr=`<div class="ch" style="grid-template-columns:50px 1fr 110px" onclick="ltExp['${f.symbol}']=!ltExp['${f.symbol}'];renderLtPicks()">
+    <div style="text-align:center"><div style="font-size:20px">${medal}</div><div class="dchip" style="background:${gc}18;border:1px solid ${gc}45;color:${gc};padding:2px 8px;font-size:10px;margin-top:4px">${f.grade}</div></div>
+    <div><span class="sym-glow">${f.symbol}</span><div style="font-size:11px;color:${I3};margin-top:2px">${f.company||""} ${f.sector?"· "+f.sector:""}</div><div class="badges">${tags}</div></div>
+    <div class="pc"><div class="cmp">${fpr(f.cmp)}</div><span class="dchip" style="background:${gc}16;border:1px solid ${gc}40;color:${gc};font-size:10px;margin-top:5px">Score ${f.score}/23</span><div class="chv">${isO?"▲ hide":"▼ details"}</div></div>
+  </div>`;
+  const glowBg=`background:linear-gradient(135deg,${gc}0d,transparent 65%);`;
+  if(!isO)return`<div class="card gcard card-enter" style="border-left:3px solid ${gc};${glowBg}box-shadow:0 1px 3px rgba(0,0,0,.3),inset 0 0 0 1px ${gc}12;">${hdr}</div>`;
+  return`<div class="card gcard open card-enter" style="border-left:3px solid ${gc};${glowBg}">${hdr}
+  <div class="cb">${renderLtDetail(f)}</div></div>`
+}
+// COMPACT ROW for ranks 11-20 — same expanded detail on click, condensed collapsed row
+function renderLtCardCompact(f,rank){
+  const isO=!!ltExp[f.symbol];const gc=ltGC(f.grade);
+  const chg=f.change_pct;
+  const row=`<div onclick="ltExp['${f.symbol}']=!ltExp['${f.symbol}'];renderLtPicks()" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3);width:22px;text-align:center">#${rank}</div>
+    <div style="width:32px;height:32px;border-radius:50%;background:${gc}14;border:1px solid ${gc}40;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:800;color:${gc};flex-shrink:0">${f.grade}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--ink)">${f.symbol}</div>
+      <div style="font-size:9px;color:${I3};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f.company||f.sector||""}</div>
     </div>
-  </div></div>`
+    <div style="text-align:right;flex-shrink:0">
+      <div class="cmp" style="font-size:12px">${fpr(f.cmp)}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:${gc};font-weight:700">Score ${f.score}/23</div>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:${I3};width:14px;text-align:center">${isO?"▲":"▼"}</div>
+  </div>`;
+  const glowBg=`background:linear-gradient(135deg,${gc}08,transparent 65%);`;
+  if(!isO)return`<div class="card gcard card-enter" style="border-left:2px solid ${gc};${glowBg}">${row}</div>`;
+  return`<div class="card gcard open card-enter" style="border-left:2px solid ${gc};${glowBg}">${row}
+  <div class="cb">${renderLtDetail(f)}</div></div>`
 }
 function renderLtPicks(){
   const c=document.getElementById("ltPicks");
   if(!ltStocks.length){c.innerHTML="";return;}
-  c.innerHTML=`<div class="pkh"><span class="pkt">Top ${ltStocks.length} Long-Term Value Picks</span><span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:${P}">FUNDAMENTAL</span></div>`+ltStocks.map((f,i)=>renderLtCard(f,i+1)).join("");
+  const top=ltStocks.slice(0,10), rest=ltStocks.slice(10,20);
+  let html=`<div class="pkh"><span class="pkt">Top ${Math.min(10,ltStocks.length)} Long-Term Value Picks</span><span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:${P}">FUNDAMENTAL</span></div>`+top.map((f,i)=>renderLtCard(f,i+1)).join("");
+  if(rest.length){
+    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">tap to expand</span></div>`
+        +`<div style="border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">`+rest.map((f,i)=>renderLtCardCompact(f,i+11)).join("")+`</div>`;
+  }
+  c.innerHTML=html;
 }
 
 // LONG-TERM SCAN
