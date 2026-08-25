@@ -384,10 +384,6 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
       </div>
     </div>
 
-    <div id="moversStrip" style="display:none;margin-bottom:14px">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">🔥 Today's Watchlist Movers — raw % change, no setup-quality filter</div>
-      <div id="moversRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px"></div>
-    </div>
     <div id="bullBearWrap" style="display:none;margin-bottom:14px">
       <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--up);margin-bottom:8px">▲ Top 20 Bull Run</div>
       <div id="bullRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px"></div>
@@ -731,19 +727,6 @@ function makeMiniOHLC(prices){
   }).join("")}</div>`;
 }
 
-function renderMoversStrip(movers){
-  const wrap=document.getElementById("moversStrip"); const row=document.getElementById("moversRow");
-  if(!movers||!movers.length){ if(wrap) wrap.style.display="none"; return; }
-  wrap.style.display="block";
-  row.innerHTML=movers.map(m=>{
-    const chg=m.change_pct||0; const up=chg>=0; const c=up?U:D;
-    return `<div onclick="analyseHotStock('${m.symbol}')" style="flex:0 0 auto;cursor:pointer;background:${c}0d;border:1px solid ${c}30;border-radius:10px;padding:8px 12px;min-width:92px;text-align:center">
-      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--ink)">${m.symbol}</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;color:${c};margin-top:2px">${up?"▲":"▼"} ${Math.abs(chg)}%</div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:2px">${fpr(m.cmp)} · Score ${m.score??"—"}</div>
-    </div>`;
-  }).join("");
-}
 function renderBullBear(bulls,bears){
   const wrap=document.getElementById("bullBearWrap");
   const bl=document.getElementById("bullRow"), be=document.getElementById("bearRow");
@@ -1024,7 +1007,6 @@ async function runScan(){
     // Save prev scores before updating
     sd.top10.forEach(s=>{ _prevScores[s.symbol]=stocks.find(x=>x.symbol===s.symbol)?.score??null; });
     stocks=sd.top10;
-    renderMoversStrip(sd.top_movers||[]);
     renderBullBear(sd.bull_movers||[], sd.bear_movers||[]);
     const reg=sd.market_regime||{};const rc3=reg.trend==="BULL"?U:reg.trend==="BEAR"?D:A;
     countUp(document.getElementById("sumScanned"),`${sd.scanned}/${sd.total||sd.scanned}`);
