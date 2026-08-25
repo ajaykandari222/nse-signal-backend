@@ -389,16 +389,10 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
       <div id="moversRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px"></div>
     </div>
     <div id="bullBearWrap" style="display:none;margin-bottom:14px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--up);margin-bottom:8px">▲ Top 20 Bull Run</div>
-          <div id="bullList" style="display:flex;flex-direction:column;gap:5px"></div>
-        </div>
-        <div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dn);margin-bottom:8px">▼ Top 20 Bear Run</div>
-          <div id="bearList" style="display:flex;flex-direction:column;gap:5px"></div>
-        </div>
-      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--up);margin-bottom:8px">▲ Top 20 Bull Run</div>
+      <div id="bullRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px"></div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dn);margin-bottom:8px">▼ Top 20 Bear Run</div>
+      <div id="bearRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px"></div>
     </div>
     <div id="picks"></div>
     <div class="logw" id="logWrap" style="display:none"><div class="logt">Activity Log</div><div class="logb" id="logBox"></div></div>
@@ -752,21 +746,19 @@ function renderMoversStrip(movers){
 }
 function renderBullBear(bulls,bears){
   const wrap=document.getElementById("bullBearWrap");
-  const bl=document.getElementById("bullList"), be=document.getElementById("bearList");
+  const bl=document.getElementById("bullRow"), be=document.getElementById("bearRow");
   if((!bulls||!bulls.length)&&(!bears||!bears.length)){ if(wrap) wrap.style.display="none"; return; }
   wrap.style.display="block";
-  const row=(m,c)=>{
+  const chip=(m,c)=>{
     const chg=m.change_pct||0;
-    return `<div onclick="analyseHotStock('${m.symbol}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:${c}0d;border:1px solid ${c}25;border-radius:8px;padding:6px 10px">
+    return `<div onclick="analyseHotStock('${m.symbol}')" style="flex:0 0 auto;cursor:pointer;background:${c}0d;border:1px solid ${c}30;border-radius:10px;padding:8px 12px;min-width:92px;text-align:center">
       <div style="font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--ink)">${m.symbol}</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3)">${fpr(m.cmp)} · Sc ${m.score??"—"}</span>
-        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:800;color:${c}">${chg>=0?"▲":"▼"} ${Math.abs(chg)}%</span>
-      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:800;color:${c};margin-top:2px">${chg>=0?"▲":"▼"} ${Math.abs(chg)}%</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:2px">${fpr(m.cmp)} · Score ${m.score??"—"}</div>
     </div>`;
   };
-  bl.innerHTML=(bulls||[]).map(m=>row(m,U)).join("") || `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);padding:6px">No gainers found</div>`;
-  be.innerHTML=(bears||[]).map(m=>row(m,D)).join("") || `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);padding:6px">No losers found</div>`;
+  bl.innerHTML=(bulls||[]).map(m=>chip(m,U)).join("") || `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);padding:6px">No gainers found</div>`;
+  be.innerHTML=(bears||[]).map(m=>chip(m,D)).join("") || `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);padding:6px">No losers found</div>`;
 }
 function renderTechDetail(s){
   const dc=s.direction==="BULLISH"?U:s.direction==="BEARISH"?D:A;
