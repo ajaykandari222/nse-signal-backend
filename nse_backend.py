@@ -111,6 +111,22 @@ def get_fno_buildup(sym):
     with _fno_cache_lock:
         return _fno_cache.get(sym)
 
+# ── FULL SCAN SNAPSHOT (all watchlist stocks, not just top-20) ──────────────
+# _do_scan only persists the top-20 slice into the "scan" job result (that's all the
+# Short-Term tab needs), but Sector Pulse needs every stock's score/RS to compute real
+# sector-level breadth, not just whichever 20 stocks happened to rank highest overall.
+# The per-stock _stock_cache has this too but its 4-min TTL is far shorter than Sector
+# Pulse's 2-hour run cadence, so it'd mostly be empty by the time Sector Pulse reads it —
+# this snapshot has no TTL, just "whatever the most recent full scan found."
+_full_scan_snapshot = {}
+_full_scan_snapshot_lock = threading.Lock()
+def set_full_scan_snapshot(d):
+    with _full_scan_snapshot_lock:
+        _full_scan_snapshot.clear(); _full_scan_snapshot.update(d or {})
+def get_full_scan_snapshot():
+    with _full_scan_snapshot_lock:
+        return dict(_full_scan_snapshot)
+
 CACHE_TTL = 240  # seconds
 
 def get_cached_stock(sym):
@@ -789,6 +805,11 @@ def _do_scan():
         # Final save — use `completed` (not len(WATCHLIST)) so a timeout-fallback finalize
         # honestly reports how many were actually scanned, never claims more than really happened
         save_partial(results, completed, errors, partial=False)
+        # Snapshot ALL scanned stocks (not just top-20) for Sector Pulse's breadth calc —
+        # see _full_scan_snapshot comment above.
+        set_full_scan_snapshot({r["symbol"]: {"score":r.get("score"), "ret_20d":r.get("ret_20d"),
+                                                "rs_score":r.get("rs_score"), "change_pct":r.get("change_pct")}
+                                 for r in results if r.get("symbol")})
         with _jobs_lock:
             _jobs["scan"]["running"] = False
             _jobs["scan"]["last_run"] = now
@@ -1109,6 +1130,16 @@ news_score 1-10. trend: BOOMING/RISING/NEUTRAL/FALLING/AVOID. All {len(sectors_l
             _fr=_jobs.get("scan",{}).get("result",{})
         if _fr: _all=_fr.get("top10",_all)
         sym_scores={r["symbol"]:r["score"] for r in _all}
+        # Sector Rotation Breadth (new) — real, price-based sector-level Relative Strength
+        # vs NIFTY, independent of the AI/seasonal narrative score above. Uses the FULL scan
+        # snapshot (all ~364 watchlist stocks), not just the top-20 `_all` slice above, since
+        # most of any given sector's stocks won't make a global top-20 on a given day even
+        # when the whole sector is quietly rotating in. This is the "check sector RS before
+        # individual stock RS" idea — ranks sectors by real momentum 1-2 days ahead of it
+        # showing up obviously in individual stock picks.
+        snapshot=get_full_scan_snapshot()
+        regime=get_job("scan").get("result",{}).get("market_regime") or fetch_nifty_regime()
+        nifty_ret_20d=regime.get("nifty_ret_20d")
         results=[]
         for sector,stocks_list in SECTOR_STOCKS.items():
             sea_score=SEASONALITY.get(sector,{}).get(month_num,2)
@@ -1122,15 +1153,34 @@ news_score 1-10. trend: BOOMING/RISING/NEUTRAL/FALLING/AVOID. All {len(sectors_l
             combined=round(news_pts+sea_pts+tech_pts,1)
             boom="🔥 VERY HIGH" if combined>=8 else "⚡ HIGH" if combined>=6.5 else "📈 MODERATE" if combined>=5 else "➡️ NEUTRAL" if combined>=3.5 else "📉 WEAK"
             boom_color="#00e5a0" if combined>=8 else "#3d9bff" if combined>=6.5 else "#f59e0b" if combined>=5 else "#6888a8" if combined>=3.5 else "#ff4d6d"
+            # Sector breadth: average 20d return + % of sector's stocks that are individually
+            # outperforming NIFTY — the participation-breadth part of a real breadth metric,
+            # not just a single averaged number that one outlier stock could dominate.
+            sec_rets=[snapshot[s]["ret_20d"] for s in stocks_list if s in snapshot and snapshot[s].get("ret_20d") is not None]
+            sector_ret_20d=round(sum(sec_rets)/len(sec_rets),2) if sec_rets else None
+            sector_rs=round(sector_ret_20d-nifty_ret_20d,2) if (sector_ret_20d is not None and nifty_ret_20d is not None) else None
+            sec_rs_list=[snapshot[s]["rs_score"] for s in stocks_list if s in snapshot and snapshot[s].get("rs_score") is not None]
+            breadth_pct=round(100*sum(1 for v in sec_rs_list if v>0)/len(sec_rs_list),0) if sec_rs_list else None
             results.append({"sector":sector,"combined_score":combined,"boom_label":boom,"boom_color":boom_color,
                 "trend":ai.get("trend","NEUTRAL"),"news_score":news_score,"news_pts":news_pts,
                 "seasonal_score":sea_score,"seasonal_pts":sea_pts,"tech_pts":tech_pts,
                 "catalyst":ai.get("catalyst",""),"risk":ai.get("risk",""),"why":ai.get("why",""),
-                "top_stocks":stocks_list[:5],"tech_stocks":tech_syms})
+                "top_stocks":stocks_list[:5],"tech_stocks":tech_syms,
+                "sector_rs":sector_rs,"sector_ret_20d":sector_ret_20d,"breadth_pct":breadth_pct,
+                "breadth_sample":len(sec_rets)})
         results.sort(key=lambda x:x["combined_score"],reverse=True)
+        # Rotation leaders — same sectors, re-ranked purely by real price-based RS (sector_rs),
+        # separate from the combined AI/seasonal/tech score above. Only sectors with enough
+        # breadth data to be meaningful (at least 3 stocks with fresh RS data) are ranked;
+        # a sector with 1-2 data points isn't a reliable breadth read.
+        rotation=[r for r in results if r["sector_rs"] is not None and r["breadth_sample"]>=3]
+        rotation.sort(key=lambda x:x["sector_rs"],reverse=True)
+        rotation_leaders=[{"sector":r["sector"],"sector_rs":r["sector_rs"],"sector_ret_20d":r["sector_ret_20d"],
+                            "breadth_pct":r["breadth_pct"]} for r in rotation]
         set_job_done("sector_pulse",{"status":"success","scan_time":now.strftime("%I:%M %p IST"),
             "date":now.strftime("%d %b %Y"),"month":month_name,
-            "global_theme":global_theme,"india_theme":india_theme,"sectors":results})
+            "global_theme":global_theme,"india_theme":india_theme,"sectors":results,
+            "rotation_leaders":rotation_leaders})
         print(f"[SECTOR] Done")
     except Exception as e:
         print(f"[SECTOR ERR] {e}"); set_job_error("sector_pulse",e)
