@@ -993,6 +993,21 @@ function renderCardCompact(s,rank){
   return`<div class="card gcard open card-enter" style="border-left:2px solid ${uc};${glowBg}">${row}
   <div class="cb">${renderTechDetail(s)}</div></div>`
 }
+// Shared "expand all / collapse all" toggle for the Ranks 11-20 group header — used by both
+// Short-Term (stExp) and Long-Term (ltExp) tabs. Symbols are joined with "|", not a quoted
+// array literal — the previous version embedded ['SYM1','SYM2'] directly inside a
+// single-quoted onclick attribute, and the FIRST single quote inside that array literal
+// prematurely terminated the attribute, silently breaking the whole click handler (visible
+// only at runtime, never caught by static JS syntax checks since the attribute is built as
+// a plain string). Pipe-delimiting with esym()'s "&"-escaping means there are zero quote
+// characters in the payload at all, so this can't collide with any attribute quoting style.
+function toggleRangeExp(kind, csv){
+  const map = kind==="lt" ? ltExp : stExp;
+  const syms = csv.split("|").filter(Boolean);
+  const open = !syms.every(sym=>map[sym]);
+  syms.forEach(sym=>map[sym]=open);
+  if(kind==="lt") renderLtPicks(); else renderPicks();
+}
 function renderPicks(){
   const c=document.getElementById("picks");
   if(!stocks.length){c.innerHTML="";return;}
@@ -1010,8 +1025,8 @@ function renderPicks(){
     // actually expands/collapses all of ranks 11-20 at once, and its own label reflects
     // the current state. Tapping an individual card row still expands just that one card.
     const allOpen = rest.every(s=>stExp[s.symbol]);
-    const symsLit = "["+rest.map(s=>"'"+esym(s.symbol).replace(/'/g,"\\'")+"'").join(",")+"]";
-    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" onclick='const open=!(${allOpen});${symsLit}.forEach(sym=>stExp[sym]=open);renderPicks()' style="cursor:pointer;background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">${allOpen?"▲ collapse all":"▼ tap to expand"}</span></div>`
+    const symsCsv = rest.map(s=>esym(s.symbol)).join("|");
+    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" onclick="toggleRangeExp('st','${symsCsv}')" style="cursor:pointer;background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">${allOpen?"▲ collapse all":"▼ tap to expand"}</span></div>`
         +`<div style="border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">`+rest.map((s,i)=>safeCard(renderCardCompact,s,i+11)).join("")+`</div>`;
   }
   c.innerHTML=html;
@@ -1284,7 +1299,9 @@ function renderLtPicks(){
   const top=ltStocks.slice(0,10), rest=ltStocks.slice(10,20);
   let html=`<div class="pkh"><span class="pkt">Top ${Math.min(10,ltStocks.length)} Long-Term Value Picks</span><span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:${P}">FUNDAMENTAL</span></div>`+top.map((f,i)=>renderLtCard(f,i+1)).join("");
   if(rest.length){
-    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">tap to expand</span></div>`
+    const allOpen = rest.every(f=>ltExp[f.symbol]);
+    const symsCsv = rest.map(f=>esym(f.symbol)).join("|");
+    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" onclick="toggleRangeExp('lt','${symsCsv}')" style="cursor:pointer;background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">${allOpen?"▲ collapse all":"▼ tap to expand"}</span></div>`
         +`<div style="border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">`+rest.map((f,i)=>renderLtCardCompact(f,i+11)).join("")+`</div>`;
   }
   c.innerHTML=html;
