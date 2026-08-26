@@ -1360,51 +1360,28 @@ def _do_fno_buildup():
             print("[FNO] No F&O-eligible symbols matched (eligible-list fetch likely failed) — skipping")
             return
         # Stagger away from Hot Movers/Delivery — they run on the same 30-min schedule and, at
-        # server boot, all three timers start at 0 and fire in the SAME scheduler tick, meaning
-        # up to 3 threads hit nseindia.com to prime a session within milliseconds of each other
-        # from the same server IP.
+        # server boot, all three timers start at 0 and fire in the SAME scheduler tick.
         _stagger = random.uniform(8, 25)
         print(f"[FNO] Staggering {_stagger:.1f}s before priming NSE session")
         time.sleep(_stagger)
         session = rq.Session()
-        # A live diagnostic run showed a clean, consistent HTTP 403 on every single priming
-        # attempt — not an occasional/timing failure, an active block. That rules out the
-        # burst-collision theory (the stagger above didn't fix it) and points at NSE's
-        # bot-detection fingerprinting the plain requests.Session() + basic header set used
-        # here. Hardening with fuller browser-realistic headers (sec-ch-ua/-mobile/-platform,
-        # sec-fetch-*, Accept-Encoding) plus a two-step visit (homepage, THEN a get-quotes page
-        # — which is what a real browser does before ever calling quote-derivative, and sets
-        # additional cookies the bare homepage visit doesn't) is the next real lever to pull.
-        # If this still 403s, it's very likely NSE blocking Render's datacenter IP range for
-        # this endpoint specifically, which no amount of header/retry tuning fixes from here —
-        # that would mean F&O buildup isn't viable on this host without a different egress IP
-        # (e.g. a proxy), and is worth pausing on rather than continuing to iterate blind.
-        _full_headers = dict(NSE_HEADERS)
-        _full_headers.update({
-            "Accept-Encoding":"gzip, deflate, br","Upgrade-Insecure-Requests":"1",
-            "Sec-Fetch-Dest":"document","Sec-Fetch-Mode":"navigate","Sec-Fetch-Site":"none","Sec-Fetch-User":"?1",
-            "sec-ch-ua":'"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "sec-ch-ua-mobile":"?0","sec-ch-ua-platform":'"Windows"',
-        })
-        primed=False
-        for _attempt in range(5):
+        # Priming deliberately kept IDENTICAL to _do_hot_movers()'s — that one works reliably
+        # (confirmed live: Hot Movers stays fresh even while F&O buildup was 403ing on every
+        # attempt). A prior version of this function "hardened" the headers with sec-ch-ua/
+        # sec-fetch-*/Accept-Encoding plus a second get-quotes-page hop, reasoning that fuller
+        # browser-realistic headers would look less bot-like — that was backwards. Since Hot
+        # Movers proves this exact IP/plain-header combo isn't blocked, the extra headers were
+        # almost certainly the cause of the 403s (e.g. Sec-Fetch-Site:"none" alongside a set
+        # Referer is an internally inconsistent combination real browsers never send — that
+        # kind of mismatch is a classic bot-detection tell, not camouflage). Lesson: don't
+        # add "more realistic-looking" headers speculatively when a simpler, already-proven
+        # pattern exists elsewhere in this same file — copy that instead of guessing forward.
+        for _attempt in range(3):
             try:
-                r0 = session.get("https://www.nseindia.com", headers=_full_headers, timeout=10)
-                if r0.ok:
-                    # Second hop — mimics visiting an actual quote page, which sets cookies
-                    # (nsit/nseappid etc.) the API endpoint checks for that a bare homepage
-                    # GET doesn't produce.
-                    _api_headers = dict(_full_headers); _api_headers["Accept"]="application/json, text/plain, */*"
-                    _api_headers["Referer"]="https://www.nseindia.com/get-quotes/derivatives?symbol=RELIANCE"
-                    r1 = session.get("https://www.nseindia.com/get-quotes/derivatives?symbol=RELIANCE", headers=_full_headers, timeout=10)
-                    primed=True; break
-                print(f"[FNO] Prime attempt {_attempt+1}/5 got HTTP {r0.status_code}")
+                r0 = session.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=8)
+                if r0.ok: break
             except Exception as _ex: print(f"[WARN] {_ex}")
-            time.sleep(2+_attempt)  # linear backoff: 2,3,4,5,6s
-        if not primed:
-            print("[FNO] WARNING — could not prime NSE session after 5 attempts (hardened headers) — likely an IP-level block, not fixable via retry/headers from here. Skipping this run.")
-            return
-        NSE_HEADERS_FNO = _api_headers
+            time.sleep(1)
 
         _logged_keys = {"done": False}
         _stats = {"http_fail":0,"no_stocks_key":0,"no_fut_match":0,"missing_fields":0,"exception":0,"ok":0}
@@ -1412,7 +1389,7 @@ def _do_fno_buildup():
         def fetch_one_fno(sym):
             try:
                 r = session.get(f"https://www.nseindia.com/api/quote-derivative?symbol={sym}",
-                                 headers=NSE_HEADERS_FNO, timeout=10)
+                                 headers=NSE_HEADERS, timeout=10)
                 if not r.ok:
                     _stats["http_fail"]+=1
                     if _first_http_fail_status["code"] is None:
