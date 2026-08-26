@@ -94,6 +94,23 @@ def get_delivery_pct(sym):
     with _delivery_cache_lock:
         return _delivery_cache.get(sym)
 
+# ── F&O ELIGIBLE SYMBOLS + LONG/SHORT BUILDUP CACHE ──────────────────────
+# F&O eligibility is reviewed quarterly by NSE (expanded multiple times through
+# 2024-2026) — fetched fresh periodically rather than hardcoded, since a stale
+# hardcoded list would silently drift exactly like WATCHLIST itself did before
+# this session's ticker-verification fixes.
+_fno_eligible = set()
+_fno_eligible_lock = threading.Lock()
+_fno_eligible_fetched_at = 0
+_fno_cache = {}
+_fno_cache_lock = threading.Lock()
+def set_fno_cache(d):
+    with _fno_cache_lock:
+        _fno_cache.clear(); _fno_cache.update(d or {})
+def get_fno_buildup(sym):
+    with _fno_cache_lock:
+        return _fno_cache.get(sym)
+
 CACHE_TTL = 240  # seconds
 
 def get_cached_stock(sym):
@@ -577,6 +594,17 @@ def score_stock(ind, regime=None, results_info=None):
         elif dp>=65 and chg<0: score-=1.0; signals.append(f"Delivery {dp}% + price down — possible distribution ✗")
         elif dp>=65:            signals.append(f"Delivery {dp}% — high conviction, flat price")
         elif dp<25:              signals.append(f"Delivery {dp}% — mostly intraday churn")
+    # ── F&O Long/Short Buildup (new, F&O-eligible stocks only) — price + open-interest
+    # combined signal from the futures market. Long Buildup (fresh longs) is the most
+    # durable bullish signal here; Short Covering looks similar on price alone but tends
+    # to fade faster since it's short-exit-driven, not fresh conviction — scored lower.
+    fno=ind.get("fno_buildup")
+    if fno and fno.get("buildup"):
+        bt=fno["buildup"]
+        if bt=="LONG_BUILDUP":     score+=2.0; signals.append(f"F&O: LONG BUILDUP — price +{fno.get('price_chg')}%, OI +{fno.get('oi_chg_pct')}% ✓")
+        elif bt=="SHORT_COVERING": score+=0.5; signals.append(f"F&O: SHORT COVERING — price +{fno.get('price_chg')}%, OI {fno.get('oi_chg_pct')}% (weaker, may fade)")
+        elif bt=="SHORT_BUILDUP":  score-=2.0; signals.append(f"F&O: SHORT BUILDUP — price {fno.get('price_chg')}%, OI +{fno.get('oi_chg_pct')}% ✗")
+        elif bt=="LONG_UNWINDING": score-=0.5; signals.append(f"F&O: LONG UNWINDING — price {fno.get('price_chg')}%, OI {fno.get('oi_chg_pct')}%")
     d=ind.get("direction","NEUTRAL")
     if d=="BULLISH":  signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✓")
     elif d=="BEARISH":signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✗")
@@ -656,10 +684,12 @@ def fetch_one(sym, regime, prefetched_daily=None):
         ind=compute_indicators(df)
         if not ind: _record_fetch_result(sym, False); return None
         _record_fetch_result(sym, True)
-        # RS-vs-NIFTY + VCP (multi-day daily closes) + delivery % (from cache) —
-        # merged into ind before scoring so score_stock() can read them like any other signal.
+        # RS-vs-NIFTY + VCP (multi-day daily closes) + delivery % + F&O buildup (both from
+        # cache) — merged into ind before scoring so score_stock() can read them like any
+        # other signal.
         ind.update(compute_advanced_signals(daily, regime))
         ind["delivery_pct"] = get_delivery_pct(sym)
+        ind["fno_buildup"] = get_fno_buildup(sym)
         score,signals=score_stock(ind,regime,get_results_info(sym))
         # Add 14-day price history for sparkline (already have daily data)
         price_hist = []
@@ -668,6 +698,12 @@ def fetch_one(sym, regime, prefetched_daily=None):
                 price_hist = [round(float(p),2) for p in daily["Close"].tail(14).tolist() if p and p==p]
         except Exception: pass
         res=sanitise({"symbol":sym,"score":score,"signals":signals,"price_history":price_hist,**ind})
+        # Flatten fno_buildup to a plain string (badges/frontend just need the classification,
+        # not the full price/OI dict — kept nested in _ind for score_stock's re-scoring path
+        # off cached data, see fetch_one's cache-hit branch above).
+        _fno=res.get("fno_buildup")
+        res["fno_buildup"]=_fno.get("buildup") if isinstance(_fno,dict) else None
+        res["fno_oi_chg_pct"]=_fno.get("oi_chg_pct") if isinstance(_fno,dict) else None
         res["_ind"]=ind; set_cached_stock(sym,res); return res
     except: _record_fetch_result(sym, False); return None
 
@@ -771,7 +807,7 @@ def _is_market_open():
     return mo<=n<=mc
 
 def _scheduler():
-    time.sleep(8); _hot_last=0; _sec_last=0; _scan_last=0
+    time.sleep(8); _hot_last=0; _sec_last=0; _scan_last=0; _fno_last=0
     while True:
         try:
             now_ts=time.time()
@@ -787,6 +823,9 @@ def _scheduler():
                 if set_job_running("hot_movers"):
                     threading.Thread(target=_do_hot_movers,daemon=True).start()
                     _hot_last=now_ts; print("[SCHED] Auto hot movers")
+            if market_open and now_ts-_fno_last>1800:
+                threading.Thread(target=_do_fno_buildup,daemon=True).start()
+                _fno_last=now_ts; print("[SCHED] Auto F&O buildup")
             if now_ts-_sec_last>7200:
                 if set_job_running("sector_pulse"):
                     threading.Thread(target=_do_sector_pulse,daemon=True).start()
@@ -1209,6 +1248,115 @@ def fetch_delivery_data(session, now):
     except Exception as e: print(f"[DELV ERR] {e}")
     return delivery_pct
 
+def fetch_fno_eligible_symbols():
+    """NSE's F&O market-lot list — plain static CSV, no session/cookie needed unlike
+    most other NSE endpoints in this file. Tries the current archive host first, falls
+    back to the legacy host NSE sometimes still serves it from."""
+    urls = [
+        "https://nsearchives.nseindia.com/content/fo/fo_mktlots.csv",
+        "https://www1.nseindia.com/content/fo/fo_mktlots.csv",
+    ]
+    for url in urls:
+        try:
+            r = req_lib.get(url, headers=NSE_HEADERS, timeout=10)
+            if r.ok and "SYMBOL" in r.text.upper():
+                syms = set()
+                for line in r.text.splitlines()[1:]:
+                    parts = [p.strip() for p in line.split(",")]
+                    if len(parts) >= 2 and parts[1]:
+                        sym = parts[1].upper()
+                        if sym and sym not in ("SYMBOL","NIFTY","BANKNIFTY","FINNIFTY","MIDCPNIFTY","NIFTYNXT50"):
+                            syms.add(sym)
+                if len(syms) > 50:
+                    print(f"[FNO LIST] {len(syms)} F&O-eligible symbols from {url}")
+                    return syms
+        except Exception as e:
+            print(f"[FNO LIST ERR] {url}: {e}")
+    return set()
+
+def get_fno_eligible():
+    """Refreshes every 6h — F&O eligibility doesn't change intraday, no need to hit this
+    every scan cycle."""
+    global _fno_eligible, _fno_eligible_fetched_at
+    with _fno_eligible_lock:
+        if time.time()-_fno_eligible_fetched_at > 6*3600 or not _fno_eligible:
+            fresh = fetch_fno_eligible_symbols()
+            if fresh:
+                _fno_eligible = fresh; _fno_eligible_fetched_at = time.time()
+        return set(_fno_eligible)
+
+def _do_fno_buildup():
+    """Long/Short buildup classification for the F&O-eligible subset of WATCHLIST —
+    combines futures price change with open-interest change:
+      price up   + OI up   -> LONG BUILDUP    (fresh longs — most durable, bullish)
+      price up   + OI down -> SHORT COVERING  (shorts exiting — tends to fade faster)
+      price down + OI up   -> SHORT BUILDUP   (fresh shorts — durable, bearish)
+      price down + OI down -> LONG UNWINDING  (longs exiting)
+    Runs every 30 min (same cadence as Hot Movers/Delivery), not every 5-min scan —
+    hitting NSE's per-symbol quote-derivative endpoint for all ~190-220 F&O names on
+    every scan cycle would be slow and a real rate-limit risk on top of the delivery/
+    FII/results-calendar NSE calls already made each cycle.
+    NOTE: NSE's quote-derivative JSON field names for OI-change aren't 100% confirmed
+    against a live payload (no way to test against NSE's anti-bot layer from this
+    environment) — field names below are based on the same underlying API's documented
+    shape via the well-established nsetools library. First successful fetch logs the
+    actual top-level metadata keys seen, same defensive-logging pattern already used for
+    FII/DII data in this file, so field names can be corrected in one line if needed.
+    """
+    try:
+        import requests as rq
+        eligible = get_fno_eligible()
+        targets = [s for s in WATCHLIST if s in eligible] if eligible else []
+        if not targets:
+            print("[FNO] No F&O-eligible symbols matched (list fetch may have failed) — skipping")
+            return
+        session = rq.Session()
+        for _attempt in range(3):
+            try:
+                r0 = session.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=8)
+                if r0.ok: break
+            except Exception as _ex: print(f"[WARN] {_ex}")
+            time.sleep(1)
+
+        _logged_keys = {"done": False}
+        def fetch_one_fno(sym):
+            try:
+                r = session.get(f"https://www.nseindia.com/api/quote-derivative?symbol={sym}",
+                                 headers=NSE_HEADERS, timeout=10)
+                if not r.ok: return sym, None
+                data = r.json()
+                stocks = data.get("stocks", [])
+                fut = next((s for s in stocks if "FUT" in str(s.get("metadata",{}).get("instrumentType","")).upper()), None)
+                if not fut: return sym, None
+                meta = fut.get("metadata", {})
+                if not _logged_keys["done"]:
+                    print(f"[FNO] Sample metadata keys: {list(meta.keys())[:15]}")
+                    _logged_keys["done"] = True
+                chg_pct = meta.get("pChange")
+                oi_chg_pct = meta.get("pchangeinOpenInterest") or meta.get("changeInOpenInterestPercentage")
+                if chg_pct is None or oi_chg_pct is None: return sym, None
+                chg_pct = float(chg_pct); oi_chg_pct = float(oi_chg_pct)
+                if chg_pct>0 and oi_chg_pct>0:   bt="LONG_BUILDUP"
+                elif chg_pct>0 and oi_chg_pct<0: bt="SHORT_COVERING"
+                elif chg_pct<0 and oi_chg_pct>0: bt="SHORT_BUILDUP"
+                elif chg_pct<0 and oi_chg_pct<0: bt="LONG_UNWINDING"
+                else: bt=None
+                return sym, {"buildup":bt,"price_chg":round(chg_pct,2),"oi_chg_pct":round(oi_chg_pct,2)}
+            except Exception:
+                return sym, None
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        result = {}
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            futs = {ex.submit(fetch_one_fno, s): s for s in targets}
+            for f in as_completed(futs):
+                sym, val = f.result()
+                if val: result[sym] = val
+        set_fno_cache(result)
+        print(f"[FNO] Buildup classified for {len(result)}/{len(targets)} F&O-eligible stocks")
+    except Exception as e:
+        print(f"[FNO ERR] {e}")
+
 def _do_hot_movers():
     try:
         import requests as rq
@@ -1489,6 +1637,7 @@ def analyse(symbol):
         regime=get_job("scan").get("result",{}).get("market_regime") or fetch_nifty_regime()
         ind.update(compute_advanced_signals(daily, regime))
         ind["delivery_pct"] = get_delivery_pct(sym)
+        ind["fno_buildup"] = get_fno_buildup(sym)
         t_score,t_sigs=score_stock(ind,regime,get_results_info(sym))
         fund=fetch_fundamentals(sym)
         f_score,f_sigs=score_fundamentals(fund) if fund else (0,["Fundamental data unavailable"])
@@ -1524,6 +1673,8 @@ def analyse(symbol):
             "rs_score":ind.get("rs_score"),"ret_20d":ind.get("ret_20d"),
             "vcp_setup":ind.get("vcp_setup"),"vcp_contractions":ind.get("vcp_contractions"),
             "delivery_pct":ind.get("delivery_pct"),
+            "fno_buildup":(ind.get("fno_buildup") or {}).get("buildup"),
+            "fno_oi_chg_pct":(ind.get("fno_buildup") or {}).get("oi_chg_pct"),
             "price_history":price_hist,
             "pe":fund.get("pe") if fund else None,"peg":fund.get("peg") if fund else None,
             "roe":fund.get("roe") if fund else None,"debt_equity":fund.get("debt_equity") if fund else None,
