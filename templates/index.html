@@ -994,7 +994,13 @@ function renderPicks(){
   const safeCard=(fn,s,rank)=>{ try{ return fn(s,rank); } catch(e){ console.error("[card render]",s&&s.symbol,e); return `<div class="card" style="padding:12px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dn)">⚠ ${esym((s&&s.symbol)||"?")} — render error, tap Refresh</div>`; } };
   let html=`<div class="pkh"><span class="pkt">Top ${Math.min(10,stocks.length)} Technical Setups</span><span class="tag" style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);color:${U}">LIVE DATA</span></div>`+top.map((s,i)=>safeCard(renderCard,s,i+1)).join("");
   if(rest.length){
-    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" style="background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">tap to expand</span></div>`
+    // "tap to expand" used to be a plain decorative label (no onclick at all — that was
+    // the bug: it's styled exactly like a tappable pill but never did anything). Now it
+    // actually expands/collapses all of ranks 11-20 at once, and its own label reflects
+    // the current state. Tapping an individual card row still expands just that one card.
+    const allOpen = rest.every(s=>stExp[s.symbol]);
+    const symsLit = "["+rest.map(s=>"'"+esym(s.symbol).replace(/'/g,"\\'")+"'").join(",")+"]";
+    html+=`<div class="pkh" style="margin-top:16px"><span class="pkt" style="font-size:12px">Ranks 11–${10+rest.length}</span><span class="tag" onclick='const open=!(${allOpen});${symsLit}.forEach(sym=>stExp[sym]=open);renderPicks()' style="cursor:pointer;background:rgba(255,255,255,.04);border:1px solid var(--border);color:${I3}">${allOpen?"▲ collapse all":"▼ tap to expand"}</span></div>`
         +`<div style="border-radius:var(--r);overflow:hidden;border:1px solid var(--border)">`+rest.map((s,i)=>safeCard(renderCardCompact,s,i+11)).join("")+`</div>`;
   }
   c.innerHTML=html;
