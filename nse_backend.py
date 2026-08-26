@@ -7,7 +7,7 @@ HTTP requests return in <1 second always — no more 502.
 
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
-import os, json, math, time, threading, secrets, gc
+import os, json, math, time, threading, secrets, gc, random
 from functools import wraps
 from datetime import datetime
 import pytz, requests as req_lib
@@ -1359,24 +1359,44 @@ def _do_fno_buildup():
         if not targets:
             print("[FNO] No F&O-eligible symbols matched (eligible-list fetch likely failed) — skipping")
             return
+        # Stagger away from Hot Movers/Delivery — they run on the same 30-min schedule and, at
+        # server boot, all three timers start at 0 and fire in the SAME scheduler tick, meaning
+        # up to 3 threads hit nseindia.com to prime a session within milliseconds of each other
+        # from the same server IP. A live diagnostic run showed exactly this: session priming
+        # failed 100% of the time (http_fail=167/167) even though the F&O-list fetch (a
+        # different, unauthenticated NSE host) succeeded fine in the same run — strong evidence
+        # of a request-burst / rate-limit rejection, not a credentials or field-mapping problem.
+        # This sleep is intentionally random so a manual /fno-refresh trigger also doesn't
+        # collide with whatever the scheduler happens to be doing at that exact moment.
+        _stagger = random.uniform(8, 25)
+        print(f"[FNO] Staggering {_stagger:.1f}s before priming NSE session (avoid burst collision with Hot Movers/Delivery)")
+        time.sleep(_stagger)
         session = rq.Session()
         primed=False
-        for _attempt in range(3):
+        for _attempt in range(5):
             try:
-                r0 = session.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=8)
+                r0 = session.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=10)
                 if r0.ok: primed=True; break
+                print(f"[FNO] Prime attempt {_attempt+1}/5 got HTTP {r0.status_code}")
             except Exception as _ex: print(f"[WARN] {_ex}")
-            time.sleep(1)
-        if not primed: print("[FNO] WARNING — could not prime NSE session, requests will likely 401/403")
+            time.sleep(2+_attempt)  # linear backoff: 2,3,4,5,6s
+        if not primed:
+            print("[FNO] WARNING — could not prime NSE session after 5 attempts, requests will likely 401/403 — skipping this run, will retry next cycle")
+            return
 
         _logged_keys = {"done": False}
         _stats = {"http_fail":0,"no_stocks_key":0,"no_fut_match":0,"missing_fields":0,"exception":0,"ok":0}
+        _first_http_fail_status = {"code": None}
         def fetch_one_fno(sym):
             try:
                 r = session.get(f"https://www.nseindia.com/api/quote-derivative?symbol={sym}",
                                  headers=NSE_HEADERS, timeout=10)
                 if not r.ok:
-                    _stats["http_fail"]+=1; return sym, None
+                    _stats["http_fail"]+=1
+                    if _first_http_fail_status["code"] is None:
+                        _first_http_fail_status["code"]=r.status_code
+                        print(f"[FNO] First http_fail: '{sym}' got HTTP {r.status_code}")
+                    return sym, None
                 data = r.json()
                 stocks = data.get("stocks")
                 if not stocks:
