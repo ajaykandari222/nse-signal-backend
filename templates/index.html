@@ -886,9 +886,9 @@ function renderTechDetail(s){
       </div>
     </div>
 
-    <!-- Advanced Setups: RS vs NIFTY, VCP, Delivery % -->
+    <!-- Advanced Setups: RS vs NIFTY, VCP, Delivery %, F&O Buildup -->
     <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink3);margin-bottom:8px">🎯 Advanced Setups</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
       <div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
         <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);margin-bottom:8px">RS vs NIFTY (20d)</div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:${s.rs_score==null?I2:s.rs_score>=3?U:s.rs_score<=-3?D:I2}">${s.rs_score!=null?(s.rs_score>=0?"+":"")+s.rs_score+"%":"—"}</div>
@@ -903,6 +903,11 @@ function renderTechDetail(s){
         <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);margin-bottom:8px">Delivery %</div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:800;color:${s.delivery_pct==null?I2:s.delivery_pct>=65?(s.change_pct>0?U:D):I2}">${s.delivery_pct!=null?s.delivery_pct+"%":"—"}</div>
         <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:5px">${s.delivery_pct==null?"Unavailable":s.delivery_pct>=65?(s.change_pct>0?"Accumulation":"Possible distribution"):s.delivery_pct<25?"Mostly intraday churn":"Normal"}</div>
+      </div>
+      <div style="background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);margin-bottom:8px">F&O Buildup</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;padding:6px;border-radius:7px;background:${s.fno_buildup==="LONG_BUILDUP"?"rgba(16,185,129,.15)":s.fno_buildup==="SHORT_BUILDUP"?"rgba(244,63,94,.15)":"rgba(255,255,255,.03)"};border:1px solid ${s.fno_buildup==="LONG_BUILDUP"?"rgba(16,185,129,.4)":s.fno_buildup==="SHORT_BUILDUP"?"rgba(244,63,94,.4)":"var(--border)"};color:${s.fno_buildup==="LONG_BUILDUP"?U:s.fno_buildup==="SHORT_BUILDUP"?D:I3}">${s.fno_buildup?s.fno_buildup.replace("_"," "):"N/A"}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:5px">${s.fno_buildup?"OI "+(s.fno_oi_chg_pct>=0?"+":"")+s.fno_oi_chg_pct+"%":"Not F&O-eligible or no data"}</div>
       </div>
     </div>
 
@@ -945,6 +950,8 @@ function renderCard(s,rank){
     s.vcp_setup?`<span class="tag" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:${A}">🌀 VCP</span>`:"",
     (s.rs_score!=null&&s.rs_score>=8)?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">RS LEADER</span>`:"",
     (s.delivery_pct!=null&&s.delivery_pct>=65&&s.change_pct>0)?`<span class="tag" style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.35);color:${P}">DELV ${s.delivery_pct}%</span>`:"",
+    s.fno_buildup==="LONG_BUILDUP"?`<span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:${U}">F&O LONG BUILDUP</span>`:"",
+    s.fno_buildup==="SHORT_BUILDUP"?`<span class="tag" style="background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);color:${D}">F&O SHORT BUILDUP</span>`:"",
   ].join("");
   const hdr=`<div class="ch" onclick="stExp['${esym(s.symbol)}']=!stExp['${esym(s.symbol)}'];renderPicks()">
     <div style="text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px">
