@@ -80,6 +80,20 @@ def get_results_info(sym):
     with _results_calendar_lock:
         return _results_calendar.get(sym)
 
+# ── DELIVERY % CACHE ──────────────────────────────────────────────────────
+# Populated by Hot Movers' fetch_delivery_data() every 30 min during market hours
+# (same cadence/source as before — this just makes the already-fetched NSE bhavcopy
+# delivery data available to score_stock() too, not only the Hot Movers display).
+_delivery_cache = {}
+_delivery_cache_lock = threading.Lock()
+def set_delivery_cache(delivery_dict):
+    with _delivery_cache_lock:
+        _delivery_cache.clear()
+        _delivery_cache.update(delivery_dict or {})
+def get_delivery_pct(sym):
+    with _delivery_cache_lock:
+        return _delivery_cache.get(sym)
+
 CACHE_TTL = 240  # seconds
 
 def get_cached_stock(sym):
@@ -293,6 +307,58 @@ SEASONALITY = {
 }
 
 # ── INDICATORS ────────────────────────────────────────────────────────────
+def detect_vcp(daily):
+    """Simplified Volatility Contraction Pattern check (Minervini-style), approximated
+    without full pivot-swing detection: splits the trailing ~30 sessions into three equal
+    legs and checks that each successive leg's price range is tighter than the last
+    (progressive contraction) with volume also drying up in the final leg — the two
+    defining VCP characteristics — plus price sitting near the base's high (close to the
+    breakout pivot). This is a pragmatic approximation, not full chart-pattern recognition
+    (real VCP tools like MarketSmith use tick-level swing/pivot analysis) — it catches the
+    same "coiling spring" shape but will occasionally miss patterns with irregular leg
+    boundaries. Runs off the same 60-day daily data already fetched for every stock, so it
+    adds zero new API calls or memory overhead to the scan.
+    Returns (vcp_setup: bool, contractions: int 0-2)."""
+    try:
+        if daily is None or len(daily) < 33: return False, 0
+        close = daily["Close"].squeeze().astype(float).dropna()
+        vol = daily["Volume"].squeeze().astype(float).dropna()
+        if len(close) < 33 or len(vol) < 33: return False, 0
+        c = close.iloc[-30:]; v = vol.iloc[-30:]
+        legs_c = [c.iloc[0:10], c.iloc[10:20], c.iloc[20:30]]
+        legs_v = [v.iloc[0:10], v.iloc[10:20], v.iloc[20:30]]
+        ranges = [(float(leg.max())-float(leg.min()))/max(float(leg.mean()),0.01)*100 for leg in legs_c]
+        vol_avgs = [float(leg.mean()) for leg in legs_v]
+        tightening = ranges[0] > ranges[1] > ranges[2]
+        vol_dryup = vol_avgs[2] < vol_avgs[0]*0.85 if vol_avgs[0] > 0 else False
+        near_pivot = float(c.iloc[-1]) >= float(c.max())*0.95
+        contractions = int(ranges[0]>ranges[1]) + int(ranges[1]>ranges[2])
+        setup = bool(tightening and vol_dryup and near_pivot)
+        return setup, contractions
+    except Exception:
+        return False, 0
+
+def compute_advanced_signals(daily, regime=None):
+    """RS-vs-NIFTY + VCP — computed off multi-day daily closes (kept deliberately separate
+    from compute_indicators()'s `df`, which is often today's 5-min intraday bars, not
+    multi-day history — both of these signals need real day-to-day price action)."""
+    out = {"ret_20d": None, "rs_score": None, "vcp_setup": False, "vcp_contractions": 0}
+    try:
+        if daily is None or len(daily) < 25: return out
+        close = daily["Close"].squeeze().astype(float).dropna()
+        if len(close) < 25: return out
+        lb = min(20, len(close)-1)
+        ret = (float(close.iloc[-1]) / float(close.iloc[-1-lb]) - 1) * 100
+        out["ret_20d"] = round(ret, 2)
+        nifty_ret = (regime or {}).get("nifty_ret_20d")
+        if nifty_ret is not None:
+            out["rs_score"] = round(ret - nifty_ret, 2)
+        setup, contractions = detect_vcp(daily)
+        out["vcp_setup"] = setup; out["vcp_contractions"] = contractions
+    except Exception:
+        pass
+    return out
+
 def compute_indicators(df):
     if df is None or len(df) < 26: return None
     try:
@@ -484,6 +550,33 @@ def score_stock(ind, regime=None, results_info=None):
             days=results_info.get("days_away")
             if days is not None and days<=7:
                 score+=0.5; signals.append(f"📅 Results in {days}d — pre-earnings watch")
+    # ── Relative Strength vs NIFTY (new) — 20-trading-day excess return over the index.
+    # This is the single most independently-validated "hidden" factor in momentum research
+    # (Weinstein's Stage Analysis, IBD's RS Rating, Minervini's live track record): a stock
+    # already beating the index tends to keep leading. Filters out the "textbook bullish
+    # indicators, but the whole stock is a market laggard" false positive.
+    rs=ind.get("rs_score")
+    if rs is not None:
+        if rs>=8:     score+=2.0; signals.append(f"RS vs NIFTY +{rs}% (20d) — strong leader ✓")
+        elif rs>=3:   score+=1.0; signals.append(f"RS vs NIFTY +{rs}% (20d) — outperforming ✓")
+        elif rs<=-8:  score-=1.5; signals.append(f"RS vs NIFTY {rs}% (20d) — badly lagging ✗")
+        elif rs<=-3:  score-=0.5; signals.append(f"RS vs NIFTY {rs}% (20d) — underperforming ✗")
+        else:         signals.append(f"RS vs NIFTY {rs}% (20d) — in-line with index")
+    # ── VCP — Volatility Contraction Pattern (new). See detect_vcp() for the exact
+    # (simplified) criteria — progressively tighter price ranges + volume dry-up + near pivot.
+    if ind.get("vcp_setup"):
+        score+=2.0; signals.append(f"VCP setup — {ind.get('vcp_contractions')} tightening contractions, volume drying up ✓")
+    # ── Delivery % accumulation/distribution (new) — real ownership change (NSE bhavcopy),
+    # not just intraday churn. Read together with price direction: high delivery + price up
+    # is conviction buying; high delivery + price down can be distribution, not accumulation —
+    # so it's never scored as a standalone positive regardless of price.
+    dp=ind.get("delivery_pct")
+    if dp is not None:
+        chg=ind.get("change_pct",0) or 0
+        if dp>=65 and chg>0:   score+=1.5; signals.append(f"Delivery {dp}% + price up — real accumulation ✓")
+        elif dp>=65 and chg<0: score-=1.0; signals.append(f"Delivery {dp}% + price down — possible distribution ✗")
+        elif dp>=65:            signals.append(f"Delivery {dp}% — high conviction, flat price")
+        elif dp<25:              signals.append(f"Delivery {dp}% — mostly intraday churn")
     d=ind.get("direction","NEUTRAL")
     if d=="BULLISH":  signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✓")
     elif d=="BEARISH":signals.append(f"TARGET ₹{ind.get('target_price')} ({ind.get('target_pct')}%) | SL ₹{ind.get('stop_loss')} | R:R 1:{ind.get('risk_reward')} ✗")
@@ -501,7 +594,16 @@ def fetch_nifty_regime():
         cmp=float(close.iloc[-1]); prev=float(close.iloc[-2]); chg=round((cmp-prev)/prev*100,2)
         strength=sum([cmp>ema20,ema20>ema50,chg>0])
         trend="BULL" if strength>=2 else "BEAR" if strength<=0 else "NEUTRAL"
-        return {"trend":trend,"strength":strength,"ema20":round(ema20,2),"ema50":round(ema50,2),"cmp":round(cmp,2),"change_pct":chg}
+        # 20-trading-day return for the index — benchmark leg of the Relative Strength signal.
+        # 20d (not the more commonly cited 55d) because that's what fits inside the existing
+        # 60-calendar-day daily fetch already used everywhere else in this file, without adding
+        # a second, longer-period API call per scan cycle.
+        nifty_ret_20d=None
+        try:
+            lb=min(20,len(close)-1)
+            nifty_ret_20d=round((cmp/float(close.iloc[-1-lb])-1)*100,2)
+        except: pass
+        return {"trend":trend,"strength":strength,"ema20":round(ema20,2),"ema50":round(ema50,2),"cmp":round(cmp,2),"change_pct":chg,"nifty_ret_20d":nifty_ret_20d}
     except: return {"trend":"NEUTRAL","strength":1,"change_pct":0}
 
 def batch_download(symbols, period="60d", interval="1d"):
@@ -554,6 +656,10 @@ def fetch_one(sym, regime, prefetched_daily=None):
         ind=compute_indicators(df)
         if not ind: _record_fetch_result(sym, False); return None
         _record_fetch_result(sym, True)
+        # RS-vs-NIFTY + VCP (multi-day daily closes) + delivery % (from cache) —
+        # merged into ind before scoring so score_stock() can read them like any other signal.
+        ind.update(compute_advanced_signals(daily, regime))
+        ind["delivery_pct"] = get_delivery_pct(sym)
         score,signals=score_stock(ind,regime,get_results_info(sym))
         # Add 14-day price history for sparkline (already have daily data)
         price_hist = []
@@ -1082,6 +1188,27 @@ def fetch_upcoming_results(session):
     unique.sort(key=lambda x: x["days_away"])
     return unique[:20]
 
+def fetch_delivery_data(session, now):
+    """NSE bhavcopy delivery % for today, keyed by symbol. Extracted out of _do_hot_movers
+    so both Hot Movers' display AND score_stock()'s accumulation/distribution signal can
+    reuse the same fetch instead of hitting NSE twice."""
+    delivery_pct = {}
+    try:
+        today_str = now.strftime("%d-%m-%Y")
+        delv_url = f"https://www.nseindia.com/api/deliveryposition?date={today_str}&type=&mode=downloaded"
+        dr = session.get(delv_url, headers=NSE_HEADERS, timeout=10)
+        if dr.ok:
+            ddata = dr.json().get("data", [])
+            for item in ddata:
+                sym2 = str(item.get("symbol","")).strip().upper()
+                delv = item.get("deliveryToTradedQuantity") or item.get("pctDlvToTradedQty")
+                if sym2 and delv:
+                    try: delivery_pct[sym2] = round(float(delv), 1)
+                    except Exception as _ex: print(f"[WARN] {_ex}")
+            print(f"[DELV] Got delivery % for {len(delivery_pct)} stocks")
+    except Exception as e: print(f"[DELV ERR] {e}")
+    return delivery_pct
+
 def _do_hot_movers():
     try:
         import requests as rq
@@ -1208,21 +1335,8 @@ def _do_hot_movers():
             upcoming_results = []
 
         # Delivery % from NSE bhavcopy
-        delivery_pct = {}
-        try:
-            today_str = now.strftime("%d-%m-%Y")
-            delv_url = f"https://www.nseindia.com/api/deliveryposition?date={today_str}&type=&mode=downloaded"
-            dr = session.get(delv_url, headers=NSE_HEADERS, timeout=10)
-            if dr.ok:
-                ddata = dr.json().get("data", [])
-                for item in ddata:
-                    sym2 = str(item.get("symbol","")).strip().upper()
-                    delv = item.get("deliveryToTradedQuantity") or item.get("pctDlvToTradedQty")
-                    if sym2 and delv:
-                        try: delivery_pct[sym2] = round(float(delv), 1)
-                        except Exception as _ex: print(f"[WARN] {_ex}")
-                print(f"[DELV] Got delivery % for {len(delivery_pct)} stocks")
-        except Exception as e: print(f"[DELV ERR] {e}")
+        delivery_pct = fetch_delivery_data(session, now)
+        set_delivery_cache(delivery_pct)  # cache for Short-Term/My Stock scoring to reuse
 
         # FII/DII data from NSE
         fii_dii={"fii_net":None,"dii_net":None,"fii_buy":None,"fii_sell":None,"dii_buy":None,"dii_sell":None}
@@ -1373,6 +1487,8 @@ def analyse(symbol):
                 price_hist=[round(float(p),2) for p in daily["Close"].tail(14).tolist() if p and p==p]
         except Exception: pass
         regime=get_job("scan").get("result",{}).get("market_regime") or fetch_nifty_regime()
+        ind.update(compute_advanced_signals(daily, regime))
+        ind["delivery_pct"] = get_delivery_pct(sym)
         t_score,t_sigs=score_stock(ind,regime,get_results_info(sym))
         fund=fetch_fundamentals(sym)
         f_score,f_sigs=score_fundamentals(fund) if fund else (0,["Fundamental data unavailable"])
@@ -1405,6 +1521,9 @@ def analyse(symbol):
             "mfi":ind.get("mfi"),"psar":ind.get("psar"),"psar_bullish":ind.get("psar_bullish"),
             "psar_flip_bull":ind.get("psar_flip_bull"),"psar_flip_bear":ind.get("psar_flip_bear"),
             "bullish_divergence":ind.get("bullish_divergence"),"bearish_divergence":ind.get("bearish_divergence"),
+            "rs_score":ind.get("rs_score"),"ret_20d":ind.get("ret_20d"),
+            "vcp_setup":ind.get("vcp_setup"),"vcp_contractions":ind.get("vcp_contractions"),
+            "delivery_pct":ind.get("delivery_pct"),
             "price_history":price_hist,
             "pe":fund.get("pe") if fund else None,"peg":fund.get("peg") if fund else None,
             "roe":fund.get("roe") if fund else None,"debt_equity":fund.get("debt_equity") if fund else None,
