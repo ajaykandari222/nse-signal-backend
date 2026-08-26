@@ -1346,53 +1346,84 @@ def _do_fno_buildup():
     hitting NSE's per-symbol quote-derivative endpoint for all ~190-220 F&O names on
     every scan cycle would be slow and a real rate-limit risk on top of the delivery/
     FII/results-calendar NSE calls already made each cycle.
-    NOTE: NSE's quote-derivative JSON field names for OI-change aren't 100% confirmed
-    against a live payload (no way to test against NSE's anti-bot layer from this
-    environment) — field names below are based on the same underlying API's documented
-    shape via the well-established nsetools library. First successful fetch logs the
-    actual top-level metadata keys seen, same defensive-logging pattern already used for
-    FII/DII data in this file, so field names can be corrected in one line if needed.
+    Diagnostic counters are logged every run (not just once) — first deploy showed
+    universal N/A with no way to tell whether that's "job hasn't run yet", "eligible-
+    list fetch failed", "session/auth blocked", or "field names guessed wrong", so this
+    now distinguishes those instead of failing silently in one bucket.
     """
     try:
         import requests as rq
         eligible = get_fno_eligible()
         targets = [s for s in WATCHLIST if s in eligible] if eligible else []
+        print(f"[FNO] {len(eligible)} F&O-eligible symbols fetched, {len(targets)} overlap with WATCHLIST")
         if not targets:
-            print("[FNO] No F&O-eligible symbols matched (list fetch may have failed) — skipping")
+            print("[FNO] No F&O-eligible symbols matched (eligible-list fetch likely failed) — skipping")
             return
         session = rq.Session()
+        primed=False
         for _attempt in range(3):
             try:
                 r0 = session.get("https://www.nseindia.com", headers=NSE_HEADERS, timeout=8)
-                if r0.ok: break
+                if r0.ok: primed=True; break
             except Exception as _ex: print(f"[WARN] {_ex}")
             time.sleep(1)
+        if not primed: print("[FNO] WARNING — could not prime NSE session, requests will likely 401/403")
 
         _logged_keys = {"done": False}
+        _stats = {"http_fail":0,"no_stocks_key":0,"no_fut_match":0,"missing_fields":0,"exception":0,"ok":0}
         def fetch_one_fno(sym):
             try:
                 r = session.get(f"https://www.nseindia.com/api/quote-derivative?symbol={sym}",
                                  headers=NSE_HEADERS, timeout=10)
-                if not r.ok: return sym, None
+                if not r.ok:
+                    _stats["http_fail"]+=1; return sym, None
                 data = r.json()
-                stocks = data.get("stocks", [])
+                stocks = data.get("stocks")
+                if not stocks:
+                    _stats["no_stocks_key"]+=1
+                    if not _logged_keys["done"]:
+                        print(f"[FNO] '{sym}' response top-level keys: {list(data.keys())[:15]}")
+                        _logged_keys["done"]=True
+                    return sym, None
                 fut = next((s for s in stocks if "FUT" in str(s.get("metadata",{}).get("instrumentType","")).upper()), None)
-                if not fut: return sym, None
+                if not fut:
+                    _stats["no_fut_match"]+=1
+                    if not _logged_keys["done"]:
+                        _types=[s.get("metadata",{}).get("instrumentType") for s in stocks[:5]]
+                        print(f"[FNO] '{sym}' no futures match — instrumentType values seen: {_types}")
+                        _logged_keys["done"]=True
+                    return sym, None
                 meta = fut.get("metadata", {})
                 if not _logged_keys["done"]:
-                    print(f"[FNO] Sample metadata keys: {list(meta.keys())[:15]}")
+                    print(f"[FNO] Sample metadata keys for '{sym}': {list(meta.keys())}")
                     _logged_keys["done"] = True
-                chg_pct = meta.get("pChange")
-                oi_chg_pct = meta.get("pchangeinOpenInterest") or meta.get("changeInOpenInterestPercentage")
-                if chg_pct is None or oi_chg_pct is None: return sym, None
+                # Try every plausible key-name variant for price %change and OI %change —
+                # NSE has used slightly different casings across API versions.
+                chg_pct = meta.get("pChange") or meta.get("perChange") or meta.get("percentChange")
+                oi_chg_pct = (meta.get("pchangeinOpenInterest") or meta.get("changeInOpenInterestPercentage")
+                              or meta.get("changeinOpenInterestPercentage") or meta.get("pChangeInOI"))
+                # Fall back to computing OI %change from absolute OI + absolute OI-change if
+                # the percentage field itself isn't present under any known name.
+                if oi_chg_pct is None:
+                    oi_now = meta.get("openInterest"); oi_chg_abs = meta.get("changeInOpenInterest") or meta.get("changeinOpenInterest")
+                    if oi_now is not None and oi_chg_abs is not None:
+                        try:
+                            oi_prev = float(oi_now) - float(oi_chg_abs)
+                            if oi_prev: oi_chg_pct = (float(oi_chg_abs)/oi_prev)*100
+                        except Exception: pass
+                if chg_pct is None or oi_chg_pct is None:
+                    _stats["missing_fields"]+=1; return sym, None
                 chg_pct = float(chg_pct); oi_chg_pct = float(oi_chg_pct)
                 if chg_pct>0 and oi_chg_pct>0:   bt="LONG_BUILDUP"
                 elif chg_pct>0 and oi_chg_pct<0: bt="SHORT_COVERING"
                 elif chg_pct<0 and oi_chg_pct>0: bt="SHORT_BUILDUP"
                 elif chg_pct<0 and oi_chg_pct<0: bt="LONG_UNWINDING"
                 else: bt=None
+                _stats["ok"]+=1
                 return sym, {"buildup":bt,"price_chg":round(chg_pct,2),"oi_chg_pct":round(oi_chg_pct,2)}
-            except Exception:
+            except Exception as e:
+                _stats["exception"]+=1
+                if _stats["exception"]<=2: print(f"[FNO] '{sym}' exception: {e}")
                 return sym, None
 
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1403,7 +1434,7 @@ def _do_fno_buildup():
                 sym, val = f.result()
                 if val: result[sym] = val
         set_fno_cache(result)
-        print(f"[FNO] Buildup classified for {len(result)}/{len(targets)} F&O-eligible stocks")
+        print(f"[FNO] Buildup classified for {len(result)}/{len(targets)} — breakdown: {_stats}")
     except Exception as e:
         print(f"[FNO ERR] {e}")
 
@@ -1825,6 +1856,16 @@ def sector_refresh():
         if "sector_pulse" in _jobs: _jobs["sector_pulse"]["result"]=None
     if set_job_running("sector_pulse"): threading.Thread(target=_do_sector_pulse,daemon=True).start()
     return jsonify({"status":"started"})
+
+@app.route("/fno-refresh")
+@require_auth
+def fno_refresh():
+    """Manually triggers _do_fno_buildup() instead of waiting up to 30 min for the
+    scheduler — mainly for diagnosing the F&O buildup feature: watch server logs for the
+    "[FNO]" lines this prints (eligible-list count, per-symbol diagnostic breakdown) right
+    after hitting this instead of guessing whether/when the scheduled run happened."""
+    threading.Thread(target=_do_fno_buildup, daemon=True).start()
+    return jsonify({"status":"started","message":"Check server logs for [FNO] lines in ~20-40s"})
 
 @app.route("/news", methods=["POST"])
 def news(): return jsonify({})
