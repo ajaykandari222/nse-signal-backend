@@ -844,9 +844,20 @@ def _scheduler():
                 if set_job_running("hot_movers"):
                     threading.Thread(target=_do_hot_movers,daemon=True).start()
                     _hot_last=now_ts; print("[SCHED] Auto hot movers")
-            if market_open and now_ts-_fno_last>1800:
-                threading.Thread(target=_do_fno_buildup,daemon=True).start()
-                _fno_last=now_ts; print("[SCHED] Auto F&O buildup")
+            # F&O Long/Short Buildup — PAUSED. Extensive live diagnosis (3 rounds: burst-
+            # collision stagger, hardened browser headers, revert-to-proven-simple headers)
+            # all failed identically against NSE's quote-derivative endpoint specifically,
+            # while Hot Movers (identical session-priming code, different endpoints) keeps
+            # working fine in the same time window. That points to quote-derivative sitting
+            # behind stronger bot-management (likely a JS-execution challenge) than the
+            # endpoints Hot Movers uses — not something a plain requests.Session() can pass
+            # regardless of headers/timing/retries. Re-enable by uncommenting below only if
+            # a different approach is implemented (headless browser, different data source) —
+            # see NEW_SESSION_PROMPT.md for full diagnosis history before re-attempting the
+            # same header/retry tuning, that ground has already been covered.
+            # if market_open and now_ts-_fno_last>1800:
+            #     threading.Thread(target=_do_fno_buildup,daemon=True).start()
+            #     _fno_last=now_ts; print("[SCHED] Auto F&O buildup")
             if now_ts-_sec_last>7200:
                 if set_job_running("sector_pulse"):
                     threading.Thread(target=_do_sector_pulse,daemon=True).start()
@@ -1098,7 +1109,7 @@ def _do_sector_pulse():
                 for _nurl in ["https://economictimes.indiatimes.com/markets/rss.cms",
                                "https://www.moneycontrol.com/rss/latestnews.xml"]:
                     try:
-                        _nr = requests.get(_nurl, timeout=6, headers={"User-Agent":"Mozilla/5.0"})
+                        _nr = req_lib.get(_nurl, timeout=6, headers={"User-Agent":"Mozilla/5.0"})
                         if _nr.ok:
                             _titles = re.findall(r'<title><![CDATA[(.+?)]]></title>', _nr.text)
                             _titles += re.findall(r"<title>(.+?)</title>", _nr.text)
