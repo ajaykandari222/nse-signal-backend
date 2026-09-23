@@ -288,6 +288,13 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
 @media(max-width:420px){.logo-sub{display:none;}.tb-sub{display:none;}}
 
 
+/* Bull/Bear Run marquee — scrolls right→left like the index ticker */
+.mq{overflow:hidden;padding-bottom:4px;}
+.mq-track{display:flex;width:max-content;animation:mqScroll 40s linear infinite;will-change:transform;}
+.mq-half{display:flex;gap:8px;padding-right:8px;flex-shrink:0;}
+.mq:hover .mq-track,.mq:active .mq-track{animation-play-state:paused;}
+@keyframes mqScroll{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+@media(prefers-reduced-motion:reduce){.mq{overflow-x:auto;}.mq-track{animation:none;}.mq-half+.mq-half{display:none;}}
 /* ══ THEME SWITCHER (Dark = original, White, Off-white) ══ */
 .theme-sw{display:inline-flex;align-items:center;gap:4px;padding:3px;border-radius:20px;background:var(--border);border:1px solid var(--border2);}
 .theme-sw button{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;transition:transform .15s,border-color .15s;}
@@ -473,9 +480,9 @@ html[data-theme="white"] [style*="rgba(255,255,255,.5)"],html[data-theme="offwhi
 
     <div id="bullBearWrap" style="display:none;margin-bottom:14px">
       <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--up);margin-bottom:8px">▲ Top 20 Bull Run</div>
-      <div id="bullRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px"></div>
+      <div id="bullRow" class="mq" style="margin-bottom:12px"></div>
       <div style="font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--dn);margin-bottom:8px">▼ Top 20 Bear Run</div>
-      <div id="bearRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px"></div>
+      <div id="bearRow" class="mq"></div>
     </div>
     <div id="picks"></div>
     <div class="logw" id="logWrap" style="display:none"><div class="logt">Activity Log</div><div class="logb" id="logBox"></div></div>
@@ -835,8 +842,16 @@ function renderBullBear(bulls,bears){
       <div style="font-family:'JetBrains Mono',monospace;font-size:7px;color:var(--ink3);margin-top:2px">${fpr(m.cmp)} · Score ${m.score??"—"}</div>
     </div>`;
   };
-  bl.innerHTML=(bulls||[]).map(m=>chip(m,U)).join("") || `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);padding:6px">No gainers found</div>`;
-  be.innerHTML=(bears||[]).map(m=>chip(m,D)).join("") || `<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);padding:6px">No losers found</div>`;
+  const fill=(el,list,c,msg)=>{
+    const sig=JSON.stringify((list||[]).map(m=>[m.symbol,m.change_pct,m.cmp]));
+    if(el.dataset.sig===sig) return;            // unchanged -> don't restart the animation
+    el.dataset.sig=sig;
+    if(!list||!list.length){el.innerHTML=`<div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink3);padding:6px">${msg}</div>`;return;}
+    const half=`<div class="mq-half">${list.map(m=>chip(m,c)).join("")}</div>`;
+    el.innerHTML=`<div class="mq-track" style="animation-duration:${Math.max(20,list.length*2.2)}s">${half}${half}</div>`;
+  };
+  fill(bl,bulls,U,"No gainers found");
+  fill(be,bears,D,"No losers found");
 }
 function renderTechDetail(s){
   const dc=s.direction==="BULLISH"?U:s.direction==="BEARISH"?D:A;
