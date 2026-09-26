@@ -43,8 +43,8 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;m
 .panel{animation:fu .25s ease;}
 @keyframes fu{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 .sbox{background:linear-gradient(135deg,rgba(99,102,241,.09),rgba(168,85,247,.06));border:1px solid rgba(99,102,241,.22);border-radius:var(--r);padding:24px 28px;text-align:center;margin-bottom:16px;}
-.btn{background:linear-gradient(135deg,var(--acc),var(--pur));color:#fff;border:none;border-radius:12px;padding:13px 36px;font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(99,102,241,.4);transition:all .2s;}
-.btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(99,102,241,.55);}
+.btn{background:linear-gradient(135deg,#9C5FE0 0%,#8D4DD1 55%,#7C3AED 100%);color:#fff;border:none;border-radius:12px;padding:13px 36px;font-family:'Inter',sans-serif;font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(141,77,209,.4);transition:all .2s;}
+.btn:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(141,77,209,.55);}
 .btn:disabled{opacity:.4;transform:none;cursor:not-allowed;}
 .btn-sub{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink3);margin-top:10px;}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;display:inline-block;animation:sp .7s linear infinite;}
@@ -244,15 +244,15 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:400px;
 
 /* Buttons — richer gradient + shimmer */
 .btn{
-  background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 50%,#a855f7 100%);
-  box-shadow:0 4px 20px rgba(99,102,241,.45),inset 0 1px 0 rgba(255,255,255,.1);
+  background:linear-gradient(135deg,#9C5FE0 0%,#8D4DD1 55%,#7C3AED 100%);
+  box-shadow:0 4px 20px rgba(141,77,209,.45),inset 0 1px 0 rgba(255,255,255,.1);
   position:relative;overflow:hidden;
 }
 .btn::after{content:"";position:absolute;top:0;left:-100%;width:100%;height:100%;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.1),transparent);
   transition:left .5s;}
 .btn:hover::after{left:100%;}
-.btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(99,102,241,.6);}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(141,77,209,.6);}
 
 /* Metric boxes — subtle inner glow */
 .met{transition:all .2s;}
@@ -441,7 +441,7 @@ html[data-theme="sky"] [style*="rgba(255,255,255,.5)"],html[data-theme="offwhite
       <span class="tag" style="background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.4);color:var(--up2)">🚀 52W Breakout</span>
       <span class="tag" style="background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.25);color:var(--dn2)">ATR Target</span>
     </div>
-    <div class="sbox"><button class="btn" id="scanBtn" onclick="runScan()">▶ Run Live Technical Scan</button><div class="btn-sub" id="scanSub">Cached every 5 min in market hours · returns instantly if cached</div></div>
+    <div class="sbox"><span style="display:inline-flex;gap:8px;align-items:center"><button class="btn" id="scanBtn" onclick="runScan()">▶ Run Live Technical Scan</button><button id="scanStopBtn" onclick="stopScan('short')" style="display:none;background:transparent;border:1px solid var(--dn);color:var(--dn);border-radius:12px;padding:12px 18px;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;cursor:pointer">⏹ Stop</button></span><div class="btn-sub" id="scanSub">Cached every 5 min in market hours · returns instantly if cached</div></div>
     <div class="pgw" id="progWrap" style="display:none"><div class="pgl"><span id="progLbl"></span><span id="progPct">0%</span></div><div class="pgb"><div class="pgf" id="progFill" style="width:0%"></div></div></div>
     <div class="errb" id="errorBox" style="display:none"></div>
     <div class="sum" id="summary" style="display:none">
@@ -502,8 +502,8 @@ html[data-theme="sky"] [style*="rgba(255,255,255,.5)"],html[data-theme="offwhite
       <span class="tag" style="background:rgba(168,85,247,.1);border:1px solid rgba(168,85,247,.25);color:var(--pur)">52W Position</span>
       <span class="tag" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25);color:var(--acc2)">Analyst Target</span>
     </div>
-    <div class="sbox" style="border-color:rgba(168,85,247,.25)"><button class="btn" id="ltScanBtn" onclick="runLtScan()" style="background:linear-gradient(135deg,var(--pur),var(--acc))">🌱 Run Long-Term Value Scan</button><div class="btn-sub" id="ltScanSub">Fundamentals · P/E, ROE, growth, debt · cached · takes 2-3 min first time</div></div>
-    <div class="pgw" id="ltProgWrap" style="display:none"><div class="pgl"><span id="ltProgLbl"></span><span id="ltProgPct">0%</span></div><div class="pgb"><div class="pgf" id="ltProgFill" style="width:0%;background:linear-gradient(90deg,var(--pur),var(--acc2))"></div></div></div>
+    <div class="sbox" style="border-color:rgba(168,85,247,.25)"><span style="display:inline-flex;gap:8px;align-items:center"><button class="btn" id="ltScanBtn" onclick="runLtScan()" style="background:linear-gradient(135deg,#9C5FE0,#7C3AED)">🌱 Run Long-Term Value Scan</button><button id="ltStopBtn" onclick="stopScan('long')" style="display:none;background:transparent;border:1px solid var(--dn);color:var(--dn);border-radius:12px;padding:12px 18px;font-family:'Inter',sans-serif;font-weight:600;font-size:13px;cursor:pointer">⏹ Stop</button></span><div class="btn-sub" id="ltScanSub">Fundamentals · P/E, ROE, growth, debt · cached · takes 2-3 min first time</div></div>
+    <div class="pgw" id="ltProgWrap" style="display:none"><div class="pgl"><span id="ltProgLbl"></span><span id="ltProgPct">0%</span></div><div class="pgb"><div class="pgf" id="ltProgFill" style="width:0%;background:linear-gradient(90deg,#9C5FE0,#8D4DD1)"></div></div></div>
     <div class="errb" id="ltErrorBox" style="display:none"></div>
     <div class="sum" id="ltSummary" style="display:none">
       <div class="sc"><div class="sl">Analysed</div><div class="sv" id="ltSumScanned" style="color:var(--acc2)">—</div></div>
@@ -682,12 +682,13 @@ const U="var(--up)",D="var(--dn)",A="var(--amb)",P="var(--pur)",AC="var(--acc2)"
 setInterval(()=>{const t=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));const p=n=>String(n).padStart(2,"0");const el=document.getElementById("clock");if(el)el.textContent=`${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())} IST`;},1000);
 
 // POLL
-async function poll(url,maxWait=300,onWait,untilComplete=false){
+async function poll(url,maxWait=300,onWait,untilComplete=false,stopKey=null){
   // polls every 5s, maxWait=300s (5 min) default
   // Routes are non-blocking so each call returns instantly (202 or result)
   const t0=Date.now();
   let attempts=0;
   while(Date.now()-t0<maxWait*1000){
+    if(stopKey && _stopFlags[stopKey]) throw new Error("__STOPPED__");
     try{
       const r=await fetch(url,{credentials:"include"});
       if(!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -718,6 +719,12 @@ async function poll(url,maxWait=300,onWait,untilComplete=false){
   throw new Error("Still scanning — please click the button again to get results (they may be cached now).");
 }
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const _stopFlags={short:false,long:false};
+async function stopScan(which){
+  _stopFlags[which]=true;
+  const url=which==="short"?`${BACKEND}/scan-cancel`:`${BACKEND}/lt-scan-cancel`;
+  try{await fetch(url,{method:"POST",credentials:"include"});}catch(e){}
+}
 
 // FORMAT
 const fpr=n=>n==null?"—":"₹"+Number(n).toLocaleString("en-IN",{maximumFractionDigits:2});
@@ -1126,6 +1133,7 @@ function renderPicks(){
 async function runScan(){
   const btn=document.getElementById("scanBtn");
   btn.disabled=true;btn.innerHTML=`<span class="spin"></span> Scanning…`;
+  _stopFlags.short=false;document.getElementById("scanStopBtn").style.display="inline-flex";
   document.getElementById("idle").style.display="none";
   document.getElementById("summary").style.display="none";
   document.getElementById("logBox").innerHTML="";
@@ -1155,7 +1163,7 @@ async function runScan(){
       const progText = sc!=null && sc>0 ? `${sc}/${tot} stocks scanned…` : `Scanning ${watchlistTotal||"all"} stocks in background…`;
       sp(Math.min(20+attempt*3,80),`${progText} ${elapsed}s elapsed`);
       addLog(`[POLL] ${elapsed}s — ${sc!=null&&sc>0?`${sc}/${tot} done`:"waiting for first batch"}…`);
-    });
+    },false,"short");
     sp(85,"Rendering…");
     addLog(`[✓] ${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time}`);
     sd.top10.forEach((s,i)=>addLog(`[#${i+1}] ${s.symbol}: ₹${s.cmp} | RSI:${s.rsi} | Score:${s.score}/23`));
@@ -1180,11 +1188,24 @@ async function runScan(){
     showCacheStatus(sd);
 
   }catch(e){
+    if(e.message==="__STOPPED__"){
+      addLog("[STOP] Scan stopped by user");
+      document.getElementById("progWrap").style.display="none";
+      btn.innerHTML="▶ Run Live Technical Scan";
+      try{ const r=await fetch(`${BACKEND}/scan`,{credentials:"include"}); const d=await r.json();
+        if(d&&d.top10&&d.top10.length){ stocks=d.top10; renderBullBear(d.bull_movers||[],d.bear_movers||[]);
+          document.getElementById("sumScanned").textContent=`${d.scanned}/${d.total} (stopped)`;
+          document.getElementById("sumPicks").textContent=d.top10.length; document.getElementById("summary").style.display="grid";
+          document.getElementById("scanSub").textContent=`${d.scanned}/${d.total} stocks · stopped by user · score /23`;
+          renderPicks(); }
+      }catch(_e){}
+    } else {
     document.getElementById("errorBox").innerHTML=`<b>Error:</b> ${e.message}`;
     document.getElementById("errorBox").style.display="block";
     addLog(`[ERR] ${e.message}`);btn.innerHTML="▶ Run Live Technical Scan";
+    }
   }
-  btn.disabled=false;document.getElementById("progWrap").style.display="none";
+  btn.disabled=false;document.getElementById("progWrap").style.display="none";document.getElementById("scanStopBtn").style.display="none";
 }
 function populateQuickPicks(){
   const row=document.getElementById("qPicksRow");if(!row)return;
@@ -1410,7 +1431,7 @@ function renderLtData(sd){
   document.getElementById("ltSumPeg").textContent=avgPeg;
   document.getElementById("ltSumTime").textContent=sd.scan_time||"—";
   document.getElementById("ltSummary").style.display="grid";
-  const ltPartial=sd.partial?" · scanning more stocks in background...":"";
+  const ltPartial=sd.partial?" · scanning more stocks in background...":(sd.stopped?" · stopped by user":"");
   document.getElementById("ltScanSub").textContent=`${sd.scanned}/${sd.total||sd.scanned} stocks · ${sd.scan_time||""} · score /23${ltPartial}${sd.message?" · "+sd.message:""}`;
   renderLtPicks();
   try{showLtCacheStatus(sd);}catch(e){}
@@ -1419,6 +1440,7 @@ async function runLtScan(){
   const runId=++_ltRun;
   const btn=document.getElementById("ltScanBtn");
   btn.disabled=true;btn.innerHTML=`<span class="spin"></span> Analysing fundamentals…`;
+  _stopFlags.long=false;document.getElementById("ltStopBtn").style.display="inline-flex";
   document.getElementById("ltIdle").style.display="none";document.getElementById("ltSummary").style.display="none";
   document.getElementById("ltLogBox").innerHTML="";document.getElementById("ltErrorBox").style.display="none";
   ltLogs=[];ltStocks=[];document.getElementById("ltPicks").innerHTML="";
@@ -1433,7 +1455,7 @@ async function runLtScan(){
       const sc=partialD?.scanned, tot=partialD?.total;
       ltSp(Math.min(10+attempt*3,85),`${sc!=null?`${sc}/${tot} stocks scanned…`:"Scanning fundamentals…"} ${elapsed}s elapsed`);
       ltAddLog(`[POLL] ${elapsed}s — ${sc!=null?`${sc}/${tot} done`:"waiting for first batch"}…`);
-    },false);
+    },false,"long");
     if(!sd.top15||!sd.top15.length) throw new Error(sd.message||"Scan finished but no stocks returned fundamentals — Yahoo is probably rate-limiting. Wait a few minutes and press Refresh.");
     ltAddLog(`[✓] First results: ${sd.scanned}/${sd.total||sd.scanned} stocks analysed`);
     document.getElementById("ltProgWrap").style.display="none";
@@ -1442,6 +1464,7 @@ async function runLtScan(){
     btn.innerHTML=label(sd);
     // 2) keep polling quietly and refresh the list as more stocks arrive
     while(sd.partial && runId===_ltRun){
+      if(_stopFlags.long) throw new Error("__STOPPED__");
       await wait(6000);
       let d; try{const r=await fetch(`${BACKEND}/lt-scan`,{credentials:"include"}); if(!r.ok) continue; d=await r.json();}catch(e){continue;}
       if(d.partial===false){ if(d.top15&&d.top15.length) sd=d; else sd.partial=false; break; }
@@ -1455,11 +1478,20 @@ async function runLtScan(){
       ltAddLog(`[✓] Scan complete — ${sd.scanned}/${sd.total||sd.scanned} stocks. Expand any card for the full breakdown`);
     }
   }catch(e){
+    if(e.message==="__STOPPED__"){
+      ltAddLog("[STOP] Scan stopped by user");
+      document.getElementById("ltProgWrap").style.display="none";
+      btn.innerHTML="↺ Refresh Value Scan";
+      try{ const r=await fetch(`${BACKEND}/lt-scan`,{credentials:"include"}); const d=await r.json();
+        if(d&&d.top15&&d.top15.length){ d.partial=false; renderLtData(d); }
+      }catch(_e){}
+    } else {
     document.getElementById("ltErrorBox").innerHTML=`<b>Error:</b> ${e.message}`;
     document.getElementById("ltErrorBox").style.display="block";
     ltAddLog(`[ERR] ${e.message}`);btn.innerHTML="🌱 Run Long-Term Value Scan";
+    }
   }
-  btn.disabled=false;document.getElementById("ltProgWrap").style.display="none";
+  btn.disabled=false;document.getElementById("ltProgWrap").style.display="none";document.getElementById("ltStopBtn").style.display="none";
 }
 
 // MY STOCK
