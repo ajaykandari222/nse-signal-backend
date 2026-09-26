@@ -154,7 +154,19 @@ def set_job_running(name):
         if _jobs.get(name,{}).get("running"): return False
         _jobs[name] = _jobs.get(name,{"result":None,"last_run":None,"error":None})
         _jobs[name]["running"] = True
+        _jobs[name]["cancel"] = False
         return True
+
+def request_cancel(name):
+    with _jobs_lock:
+        if _jobs.get(name,{}).get("running"):
+            _jobs[name]["cancel"] = True
+            return True
+        return False
+
+def is_cancelled(name):
+    with _jobs_lock:
+        return bool(_jobs.get(name,{}).get("cancel"))
 
 def set_job_done(name, result):
     with _jobs_lock:
@@ -895,6 +907,7 @@ def _do_scan():
             _jobs["regime"] = {"result": regime}
 
         results = []; errors = 0; completed = 0
+        stopped_flag = [False]   # mutable so save_partial() (a closure) can see a cancel set after it was defined
 
         def save_partial(res, done, err, partial=True):
             sorted_res = sorted(res, key=lambda x: x["score"], reverse=True)
@@ -928,6 +941,7 @@ def _do_scan():
                     "market_regime": regime,
                     "nifty_change": regime.get("change_pct", 0),
                     "nifty_trend": regime.get("trend", "NEUTRAL"),
+                    "stopped": stopped_flag[0],
                 })
 
         # Pre-batch daily data in groups of 50 — one HTTP call per batch
@@ -939,6 +953,15 @@ def _do_scan():
             daily_cache.update(batch_data)
             print(f"[SCAN] Batch daily fetched: {len(daily_cache)}/{len(WATCHLIST)}")
             gc.collect()
+            if is_cancelled("scan"):
+                print("[SCAN] Stopped by user during price pre-fetch")
+                with _jobs_lock:
+                    prev = (_jobs.get("scan") or {}).get("result") or {}
+                    _jobs["scan"] = {"running": False, "cancel": False, "last_run": now,
+                        "result": sanitise({**prev, "status":"success","scanned":prev.get("scanned",0),
+                            "total":len(WATCHLIST),"top10":prev.get("top10",[]),"partial":False,"stopped":True,
+                            "scan_time":now.strftime("%I:%M %p IST"),"date":now.strftime("%d %b %Y")})}
+                return
             time.sleep(1.5)  # spread requests over time — gentler on Yahoo's rate limiter
 
         with ThreadPoolExecutor(max_workers=10) as ex:
@@ -955,11 +978,17 @@ def _do_scan():
                     if completed % 50 == 0:
                         save_partial(results, completed, errors, partial=True)
                         print(f"[SCAN] {completed}/{len(WATCHLIST)} done, {len(results)} valid")
+                        if is_cancelled("scan"):
+                            print(f"[SCAN] Stopped by user at {completed}/{len(WATCHLIST)}")
+                            for _f in futures: _f.cancel()
+                            break
             except _CFTimeoutError:
                 # Ran out of time at the current concurrency — finalize with whatever completed
                 # instead of leaving the job stuck at the last 50-stock checkpoint forever.
                 print(f"[SCAN] as_completed timeout — finalizing with {completed}/{len(WATCHLIST)} done")
 
+        stopped = is_cancelled("scan")
+        stopped_flag[0] = stopped
         del daily_cache; gc.collect()
         # Final save — use `completed` (not len(WATCHLIST)) so a timeout-fallback finalize
         # honestly reports how many were actually scanned, never claims more than really happened
@@ -972,6 +1001,7 @@ def _do_scan():
                                  for r in results if r.get("symbol")})
         with _jobs_lock:
             _jobs["scan"]["running"] = False
+            _jobs["scan"]["cancel"] = False
             _jobs["scan"]["last_run"] = now
         print(f"[SCAN] Complete — {len(results)} valid, {errors} errors")
 
@@ -1458,6 +1488,14 @@ def _do_lt_scan():
             if blocked_abort:
                 print("[LT] Aborting early — Yahoo keeps rejecting fundamentals requests (HTTP 401 crumb)")
                 break
+            if is_cancelled("lt_scan"):
+                print(f"[LT] Stopped by user — {len(all_results)} valid so far")
+                with _jobs_lock:
+                    _jobs["lt_scan"]["result"]["partial"]=False
+                    _jobs["lt_scan"]["result"]["stopped"]=True
+                    _jobs["lt_scan"]["running"]=False
+                    _jobs["lt_scan"]["cancel"]=False
+                return
 
         # One gentle retry pass for symbols Yahoo rejected (skip if nearly everything failed — that means
         # Yahoo is blocking us right now and hammering it again would only make it worse).
@@ -2368,6 +2406,18 @@ def yf_diag():
     except Exception as e: out["error"]=str(e)
     out["fundamentals_cached"]=len(_fund_cache)
     return jsonify(out)
+
+@app.route("/scan-cancel", methods=["POST","GET"])
+@require_auth
+def scan_cancel():
+    ok = request_cancel("scan")
+    return jsonify({"cancelled": ok, "message": "Stopping — will finish the batch in progress and return what's scanned so far." if ok else "No scan is currently running."})
+
+@app.route("/lt-scan-cancel", methods=["POST","GET"])
+@require_auth
+def lt_scan_cancel():
+    ok = request_cancel("lt_scan")
+    return jsonify({"cancelled": ok, "message": "Stopping — will finish the batch in progress and return what's scanned so far." if ok else "No scan is currently running."})
 
 @app.route("/lt-refresh")
 @require_auth
