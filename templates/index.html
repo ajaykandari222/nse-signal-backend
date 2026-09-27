@@ -1187,7 +1187,7 @@ async function runScan(){
     fetchIndices();
     sp(25,"Polling for scan results…");
     addLog("[SCAN] First results appear as soon as the first batch is done; the rest keeps scanning in the background.");
-    let sd=await poll(`${BACKEND}/scan`,300,(attempt,partialD)=>{
+    let sd=await poll(`${BACKEND}/scan`,600,(attempt,partialD)=>{
       const elapsed=Math.round(attempt*5);
       const sc=partialD?.scanned, tot=partialD?.total||watchlistTotal;
       const progText = sc!=null && sc>0 ? `${sc}/${tot} stocks scanned…` : `Scanning ${watchlistTotal||"all"} stocks in background…`;
