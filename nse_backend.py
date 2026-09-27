@@ -149,9 +149,33 @@ def get_job(name):
     with _jobs_lock:
         return _jobs.get(name, {"result":None,"running":False,"last_run":None,"error":None})
 
-def set_job_running(name):
+# Heavy background jobs — each one pulls a year of daily bars and/or hits Yahoo/NSE for the
+# whole watchlist. Render's free tier (512MB RAM, shared CPU) cannot run more than one of
+# these at once without starving/OOM-restarting the process (this was the actual cause of
+# Long-Term scans stalling around 80/360 stocks — it was overlapping with an auto-started
+# Short-Term scan, Hot Movers and Sector Pulse all firing together at boot).
+_HEAVY_JOBS = ("scan", "lt_scan", "hot_movers", "sector_pulse")
+
+def _other_heavy_job_running(exclude):
+    for n in _HEAVY_JOBS:
+        if n != exclude and _jobs.get(n, {}).get("running"):
+            return n
+    return None
+
+def set_job_running(name, allow_preempt=False):
+    """Marks `name` as running — refuses to start if another heavy job is already running,
+    so scans never run in parallel and overload Render's free tier.
+    allow_preempt=True is used only when starting Long-Term: an explicit "Run Long-Term"
+    click is a deliberate user action that should win over a Short-Term scan the scheduler
+    started on its own, so it's allowed to start alongside a running "scan" job — but NOT
+    alongside hot_movers/sector_pulse, which are short-lived and just get waited out.
+    _do_lt_scan() itself asks "scan" to cancel and waits briefly right after this returns."""
     with _jobs_lock:
         if _jobs.get(name,{}).get("running"): return False
+        if name in _HEAVY_JOBS:
+            busy = _other_heavy_job_running(exclude=name)
+            if busy and not (allow_preempt and busy == "scan"):
+                return False
         _jobs[name] = _jobs.get(name,{"result":None,"last_run":None,"error":None})
         _jobs[name]["running"] = True
         _jobs[name]["cancel"] = False
@@ -1034,26 +1058,38 @@ def _hot_stale(res):
     if _is_market_open(): return time.time()-gen>600            # live session: max 10 min old
     return gen < _last_close_ts()+120                            # closed: need one snapshot taken after the close
 
+# Cadence for auto-triggered scans. Nothing scans on its own more often than this, and —
+# per the startup fix below — nothing scans automatically at all until this much time has
+# passed since the server (re)started. Manual Run/Refresh button clicks are unaffected by
+# this timer; it only governs the scheduler's own background triggers.
+AUTO_SCAN_INTERVAL_SEC = 1800    # 30 min — Short-Term scan + Hot Movers
+SECTOR_PULSE_INTERVAL_SEC = 7200  # 2 hr — macro/news read, kept slower to conserve Anthropic API calls
+
 def _scheduler():
-    time.sleep(8); _hot_last=0; _sec_last=0; _scan_last=0; _fno_last=0
+    time.sleep(8)
+    # Seed every "last run" clock to NOW (not 0) so nothing fires on this tick — the whole
+    # point of a fresh boot is that scans happen when the user clicks, not automatically the
+    # instant the server wakes up. The first automatic scan of any kind now happens only
+    # AUTO_SCAN_INTERVAL_SEC after the server started (and only if the app is still awake —
+    # Render's free tier sleeps after 15 min idle, so in practice this rarely fires unless
+    # someone is actively using the app).
+    now0=time.time(); _hot_last=now0; _sec_last=now0; _scan_last=now0; _fno_last=now0
     while True:
         try:
             now_ts=time.time()
-            market_open=_is_market_open()
-            # Scan every 5 min during market hours. Outside market hours, only every 30 min —
-            # data doesn't change after close, so there's no reason to hammer Yahoo Finance
-            # every 5 min for 18 hours a day when nothing's moving.
-            scan_interval = 300 if market_open else 1800
-            if (now_ts-_scan_last>scan_interval or _scan_last==0) and not get_job("lt_scan").get("running"):
-                if set_job_running("scan"):
+            if now_ts-_scan_last>AUTO_SCAN_INTERVAL_SEC:
+                if get_job("lt_scan").get("running"):
+                    print("[SCHED] Skipping auto Short-Term scan — Long-Term scan is running (avoids CPU contention)")
+                elif set_job_running("scan"):
                     _do_scan(); _scan_last=now_ts
-            elif get_job("lt_scan").get("running"):
-                print("[SCHED] Skipping auto Short-Term scan — Long-Term scan is running (avoids CPU contention)")
-            _hr=get_job("hot_movers").get("result")
-            if (market_open and now_ts-_hot_last>600) or (not market_open and (not _hr or _hot_stale(_hr)) and now_ts-_hot_last>1800):
+                else:
+                    print("[SCHED] Skipping auto Short-Term scan — another scan is already running")
+            if now_ts-_hot_last>AUTO_SCAN_INTERVAL_SEC:
                 if set_job_running("hot_movers"):
                     threading.Thread(target=_do_hot_movers,daemon=True).start()
                     _hot_last=now_ts; print("[SCHED] Auto hot movers")
+                else:
+                    print("[SCHED] Skipping auto hot movers — another scan is already running")
             # F&O Long/Short Buildup — PAUSED. Extensive live diagnosis (3 rounds: burst-
             # collision stagger, hardened browser headers, revert-to-proven-simple headers)
             # all failed identically against NSE's quote-derivative endpoint specifically,
@@ -1068,10 +1104,12 @@ def _scheduler():
             # if market_open and now_ts-_fno_last>1800:
             #     threading.Thread(target=_do_fno_buildup,daemon=True).start()
             #     _fno_last=now_ts; print("[SCHED] Auto F&O buildup")
-            if now_ts-_sec_last>7200:
+            if now_ts-_sec_last>SECTOR_PULSE_INTERVAL_SEC:
                 if set_job_running("sector_pulse"):
                     threading.Thread(target=_do_sector_pulse,daemon=True).start()
                     _sec_last=now_ts; print("[SCHED] Auto sector pulse")
+                else:
+                    print("[SCHED] Skipping auto sector pulse — another scan is already running")
         except Exception as e: print(f"[SCHED ERR] {e}")
         time.sleep(5*60)
 
@@ -2404,7 +2442,7 @@ def lt_scan():
             return jsonify(result)      # has entries, or the scan is genuinely finished
         return jsonify(result), 202     # still scanning — but report the real progress
     if not job.get("running", False):
-        if set_job_running("lt_scan"):
+        if set_job_running("lt_scan", allow_preempt=True):
             threading.Thread(target=_do_lt_scan, daemon=True).start()
     return jsonify({
         "status": "scanning",
@@ -2489,7 +2527,7 @@ def lt_refresh():
         return jsonify({"status":"already_running","scanned":r.get("scanned",0),"total":r.get("total",len(WATCHLIST))})
     with _jobs_lock:
         if "lt_scan" in _jobs: _jobs["lt_scan"]["result"]=None
-    if set_job_running("lt_scan"): threading.Thread(target=_do_lt_scan,daemon=True).start()
+    if set_job_running("lt_scan", allow_preempt=True): threading.Thread(target=_do_lt_scan,daemon=True).start()
     return jsonify({"status":"started"})
 
 @app.route("/sector-pulse")
