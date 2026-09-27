@@ -988,7 +988,12 @@ def _do_scan():
                 return
             time.sleep(1.5)  # spread requests over time — gentler on Yahoo's rate limiter
 
-        with ThreadPoolExecutor(max_workers=10) as ex:
+        # Worker count doubled from 10 — the heavy-job mutex (_HEAVY_JOBS) guarantees this scan
+        # never overlaps with Hot Movers/Sector Pulse/Long-Term anymore, and each worker here
+        # only calls ticker.history() for today's 5-min bars (daily bars are already batch-
+        # prefetched above) — not the crumb-protected .info endpoint — so this isn't gated by
+        # _info_blocked_until the way Long-Term's fundamentals fetch is.
+        with ThreadPoolExecutor(max_workers=20) as ex:
             futures = {ex.submit(fetch_one, sym, regime, daily_cache.get(sym)): sym for sym in WATCHLIST}
             try:
                 for f in as_completed(futures, timeout=280):
@@ -1524,13 +1529,13 @@ def _do_lt_scan():
             print(f"[LT] Batch {batch_num+1}: {len(batch)} stocks")
             valid_before = len(all_results)
 
-            # Worker count doubled from the original 6/3 now that the heavy-job mutex guarantees
-            # this is the only scan running — no more splitting Render's CPU with Short-Term/Hot
-            # Movers/Sector Pulse. This is I/O-bound (waiting on Yahoo), so more concurrent
-            # requests mainly buys wall-clock speed, not more CPU load. The existing "batch fully
-            # rejected -> back off" circuit breaker just below still protects against Yahoo
-            # rate-limiting if this turns out to be too aggressive.
-            ex = ThreadPoolExecutor(max_workers=(12 if time.time() < _info_blocked_until else 6))
+            # Worker count doubled once already (6/3 -> 12/6) after the heavy-job mutex started
+            # guaranteeing this is the only scan running. Nudged up again here (12/6 -> 18/9) —
+            # there's no way to know Yahoo's actual per-IP threshold without approaching it, and
+            # the "batch fully rejected -> back off, 3 strikes -> abort" circuit breaker just
+            # below still protects against going too far: if [LT] Batch fully rejected starts
+            # showing up in logs, that's the signal to dial these two numbers back down.
+            ex = ThreadPoolExecutor(max_workers=(18 if time.time() < _info_blocked_until else 9))
             futures = {ex.submit(fetch_fundamentals, sym, daily_map.get(sym)): sym for sym in batch}
             got = set()
             try:
@@ -1599,7 +1604,9 @@ def _do_lt_scan():
                 if time.time() - scan_start > SCAN_DEADLINE:
                     timed_out = True; failed.extend(retry_failed[i:]); print("[LT] Time budget reached during retry pass"); break
                 grp = retry_failed[i:i+20]
-                ex = ThreadPoolExecutor(max_workers=8)
+                # Doubled once already (4 -> 8); nudged again (8 -> 12) alongside the main-batch
+                # bump above, same rationale — watch for [LT] Batch fully rejected in logs.
+                ex = ThreadPoolExecutor(max_workers=12)
                 futs = {ex.submit(fetch_fundamentals, sym_): sym_ for sym_ in grp}
                 got=set()
                 try:
@@ -1658,20 +1665,28 @@ def _do_sector_pulse():
                 client=anthropic.Anthropic(api_key=api_key)
                 sectors_list=list(SECTOR_STOCKS.keys())
                 # Fetch live news headlines
-                live_headlines = []
-                for _nurl in ["https://economictimes.indiatimes.com/markets/rss.cms",
-                               "https://www.moneycontrol.com/rss/latestnews.xml"]:
+                # These two feeds are independent — fetched in parallel instead of sequentially.
+                # Sector Pulse has no per-stock pool like the other three scans (it reuses
+                # Short-Term's cached scores rather than hitting Yahoo/NSE per symbol), so this
+                # is the one concurrency win available here; the real wall-clock cost is the
+                # single Anthropic call right after, which this doesn't touch.
+                def _fetch_feed(_nurl):
                     try:
                         _nr = req_lib.get(_nurl, timeout=6, headers={"User-Agent":"Mozilla/5.0"})
                         if _nr.ok:
                             _titles = re.findall(r'<title><![CDATA[(.+?)]]></title>', _nr.text)
                             _titles += re.findall(r"<title>(.+?)</title>", _nr.text)
-                            _clean = [t.strip() for t in _titles
-                                      if 15 < len(t.strip()) < 200
-                                      and "CDATA" not in t and "RSS" not in t][:10]
-                            live_headlines.extend(_clean)
-                            if len(live_headlines) >= 12: break
+                            return [t.strip() for t in _titles
+                                    if 15 < len(t.strip()) < 200
+                                    and "CDATA" not in t and "RSS" not in t][:10]
                     except Exception as _ne: print(f"[NEWS] {_ne}")
+                    return []
+                live_headlines = []
+                with ThreadPoolExecutor(max_workers=2) as _nex:
+                    for _clean in _nex.map(_fetch_feed, [
+                        "https://economictimes.indiatimes.com/markets/rss.cms",
+                        "https://www.moneycontrol.com/rss/latestnews.xml"]):
+                        live_headlines.extend(_clean)
                 news_ctx = ("\nLIVE HEADLINES TODAY:\n" + "\n".join(f"- {h}" for h in live_headlines[:12])) if live_headlines else ""
                 print(f"[SECTOR] {len(live_headlines)} live headlines fetched")
 
@@ -2214,7 +2229,10 @@ def _do_hot_movers():
                     "near_breakout":near_bo,"setup_type":st,"setup_color":sc})
             except: return None
 
-        with ThreadPoolExecutor(max_workers=10) as ex:
+        # Worker count doubled from 10 — same heavy-job-mutex reasoning as Short-Term/Long-Term:
+        # this pool never shares Render's CPU or Yahoo's rate limiter with another heavy job now.
+        # (The NSE-endpoint pool a few lines up stays at 4 — it only has 4 tasks to run.)
+        with ThreadPoolExecutor(max_workers=20) as ex:
             futures={ex.submit(check_stock,sym):sym for sym in WATCHLIST[:160]}
             for f in as_completed(futures,timeout=120):
                 try:
